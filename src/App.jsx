@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Trophy, Users, Check, X as XIcon, ExternalLink, RotateCcw, ChevronRight, Trash2, Sparkles, Lock } from "lucide-react";
+import { supabase } from "./supabase";
 
 /* ---------------------------------------------------------------
    TOKENS
@@ -18,7 +19,8 @@ const TEAM = {
 };
 
 
-const STORAGE_KEY = "ryder-cup-pickleball-tournament-v1";
+const STORAGE_KEY = "yuko-cup-single-source-scoring-v6";
+const TOURNAMENT_ID = "yuko-cup-2026";
 
 function emptyTeams() {
   return {
@@ -27,28 +29,100 @@ function emptyTeams() {
   };
 }
 
-function migrateSavedMatchScoring(saved) {
+function normalizeResult(result) {
+  if (!result) return null;
+
+  const label = String(result.label || "");
+  const winner =
+    result.winner === "A" || result.winner === "B"
+      ? result.winner
+      : result.pointsA > result.pointsB
+        ? "A"
+        : result.pointsB > result.pointsA
+          ? "B"
+          : null;
+
+  const scoreline =
+    result.scoreline === "2-0" || result.scoreline === "2-1"
+      ? result.scoreline
+      : /2\s*[–—-]\s*0/.test(label)
+        ? "2-0"
+        : /2\s*[–—-]\s*1/.test(label)
+          ? "2-1"
+          : null;
+
+  return { ...result, winner, scoreline };
+}
+
+/*
+  Authoritative scoring rules
+
+  Gendered/mixed:
+    Normal 2-0 = 3 / 0
+    Normal 2-1 = 2 / 1
+    Winning team's clutch 2-0 = 6 / 0
+    Winning team's clutch 2-1 = 4 / 2
+
+  Dreambreaker:
+    Winner = 3
+    Loser = 1
+*/
+function calculateMatchPoints(match, rawResult) {
+  const result = normalizeResult(rawResult);
+  if (!result?.winner) return { pointsA: 0, pointsB: 0 };
+
+  if (match.type === "DB") {
+    return result.winner === "A"
+      ? { pointsA: 3, pointsB: 1 }
+      : { pointsA: 1, pointsB: 3 };
+  }
+
+  if (!result.scoreline) return { pointsA: 0, pointsB: 0 };
+
+  const winningTeamSelectedClutch =
+    (result.winner === "A" && match.clutchA) ||
+    (result.winner === "B" && match.clutchB);
+
+  if (result.winner === "A") {
+    if (result.scoreline === "2-0") {
+      return winningTeamSelectedClutch
+        ? { pointsA: 6, pointsB: 0 }
+        : { pointsA: 3, pointsB: 0 };
+    }
+
+    return winningTeamSelectedClutch
+      ? { pointsA: 4, pointsB: 2 }
+      : { pointsA: 2, pointsB: 1 };
+  }
+
+  if (result.scoreline === "2-0") {
+    return winningTeamSelectedClutch
+      ? { pointsA: 0, pointsB: 6 }
+      : { pointsA: 0, pointsB: 3 };
+  }
+
+  return winningTeamSelectedClutch
+    ? { pointsA: 2, pointsB: 4 }
+    : { pointsA: 1, pointsB: 2 };
+}
+
+function normalizeSavedTournament(saved) {
   if (!saved?.roundsState) return saved;
 
   const roundsState = Object.fromEntries(
     Object.entries(saved.roundsState).map(([roundId, round]) => {
       const matches = (round.matches || []).map((match) => {
-        if (!match.result || match.type === "DB") return match;
-
-        const result = { ...match.result };
-
-        // Under the corrected scoring rules, the losing team always earns 1 point.
-        if (result.pointsA === 3 && result.pointsB === 0) result.pointsB = 1;
-        if (result.pointsB === 3 && result.pointsA === 0) result.pointsA = 1;
-
-        const aWon = result.pointsA > result.pointsB;
-        const bWon = result.pointsB > result.pointsA;
+        // Keep only match facts. Stored point totals are deliberately discarded
+        // because points are always derived from result + clutch selections.
+        const {
+          pointsA: _discardedPointsA,
+          pointsB: _discardedPointsB,
+          ...matchFacts
+        } = match;
 
         return {
-          ...match,
-          result,
-          pointsA: result.pointsA + (match.clutchA && aWon ? 1 : 0),
-          pointsB: result.pointsB + (match.clutchB && bWon ? 1 : 0),
+          ...matchFacts,
+          result: normalizeResult(match.result),
         };
       });
 
@@ -56,7 +130,11 @@ function migrateSavedMatchScoring(saved) {
     })
   );
 
-  return { ...saved, version: 2, roundsState };
+  return {
+    ...saved,
+    scoringVersion: "single-source-v6",
+    roundsState,
+  };
 }
 
 function loadSavedTournament() {
@@ -65,7 +143,7 @@ function loadSavedTournament() {
     if (!raw) return null;
     const saved = JSON.parse(raw);
     if (!saved || typeof saved !== "object") return null;
-    return migrateSavedMatchScoring(saved);
+    return normalizeSavedTournament(saved);
   } catch (error) {
     console.warn("Could not restore saved tournament:", error);
     return null;
@@ -508,6 +586,7 @@ function MatchCard({
   const isBClutch = selectedClutchBId === match.id;
   const canChooseA = clutchEditSide === "A";
   const canChooseB = clutchEditSide === "B";
+  const displayedPoints = calculateMatchPoints(match, match.result);
 
   return (
     <div
@@ -591,30 +670,33 @@ function MatchCard({
           <p className="text-sm min-w-0 truncate">
             <span style={{ fontFamily: MONO_FONT }}>{match.result.label}</span>
             <span className="text-white/35"> · </span>
-            <span style={{ color: TEAM.A.bg }}>{teams.A.name} +{match.pointsA}</span>
+            <span style={{ color: TEAM.A.bg }}>{teams.A.name} +{displayedPoints.pointsA}</span>
             <span className="text-white/35"> / </span>
-            <span style={{ color: TEAM.B.bg }}>{teams.B.name} +{match.pointsB}</span>
+            <span style={{ color: TEAM.B.bg }}>{teams.B.name} +{displayedPoints.pointsB}</span>
           </p>
           <button onClick={() => onResult(match.id, null)} className="text-xs underline text-white/50 shrink-0">Change result</button>
         </div>
       ) : isDB ? (
         <div className="px-4 py-3 grid grid-cols-2 gap-2 bg-[#0D1218]">
-          <button onClick={() => onResult(match.id, { label: `${teams.A.name} win`, pointsA: 3, pointsB: 1 })}
+          <button onClick={() => onResult(match.id, { label: `${teams.A.name} win`, winner: "A" })}
             className="text-sm py-2.5 rounded-lg text-white font-medium" style={{ backgroundColor: TEAM.A.bg }}>{teams.A.name} wins</button>
-          <button onClick={() => onResult(match.id, { label: `${teams.B.name} win`, pointsA: 1, pointsB: 3 })}
+          <button onClick={() => onResult(match.id, { label: `${teams.B.name} win`, winner: "B" })}
             className="text-sm py-2.5 rounded-lg text-white font-medium" style={{ backgroundColor: TEAM.B.bg }}>{teams.B.name} wins</button>
         </div>
       ) : (
         <div className="px-4 py-3 bg-[#0D1218]">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-white/35 mb-2">Record game result</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <p className="text-[10px] uppercase tracking-[0.15em] text-white/35">Record game result</p>
+            <p className="text-[10px] text-white/35">Normal: 3–0 or 2–1 · Clutch: 6–0 or 4–2</p>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => onResult(match.id, { label: `${teams.A.name} 2–0`, pointsA: 3, pointsB: 1 })}
+            <button onClick={() => onResult(match.id, { label: `${teams.A.name} 2–0`, winner: "A", scoreline: "2-0" })}
               className="text-sm py-2.5 rounded-lg text-white font-medium" style={{ backgroundColor: TEAM.A.bg }}>{teams.A.name} wins 2–0</button>
-            <button onClick={() => onResult(match.id, { label: `${teams.B.name} 2–0`, pointsA: 1, pointsB: 3 })}
+            <button onClick={() => onResult(match.id, { label: `${teams.B.name} 2–0`, winner: "B", scoreline: "2-0" })}
               className="text-sm py-2.5 rounded-lg text-white font-medium" style={{ backgroundColor: TEAM.B.bg }}>{teams.B.name} wins 2–0</button>
-            <button onClick={() => onResult(match.id, { label: `${teams.A.name} 2–1`, pointsA: 2, pointsB: 1 })}
+            <button onClick={() => onResult(match.id, { label: `${teams.A.name} 2–1`, winner: "A", scoreline: "2-1" })}
               className="text-sm py-2.5 rounded-lg border font-medium" style={{ borderColor: TEAM.A.bg, color: TEAM.A.bg }}>{teams.A.name} wins 2–1</button>
-            <button onClick={() => onResult(match.id, { label: `${teams.B.name} 2–1`, pointsA: 1, pointsB: 2 })}
+            <button onClick={() => onResult(match.id, { label: `${teams.B.name} 2–1`, winner: "B", scoreline: "2-1" })}
               className="text-sm py-2.5 rounded-lg border font-medium" style={{ borderColor: TEAM.B.bg, color: TEAM.B.bg }}>{teams.B.name} wins 2–1</button>
           </div>
         </div>
@@ -824,7 +906,7 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
         const oppPair = opposed[g][i];
         const teamAIds = discloserKey === "A" ? pair : oppPair;
         const teamBIds = discloserKey === "A" ? oppPair : pair;
-        matches.push({ id: uid("m"), type: g, court: court++, teamAIds, teamBIds, result: null, pointsA: 0, pointsB: 0, clutchA: false, clutchB: false });
+        matches.push({ id: uid("m"), type: g, court: court++, teamAIds, teamBIds, result: null, clutchA: false, clutchB: false });
       });
     });
     return matches;
@@ -835,7 +917,7 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
       const oppPair = opposed.MX[i];
       const teamAIds = discloserKey === "A" ? pair : oppPair;
       const teamBIds = discloserKey === "A" ? oppPair : pair;
-      return { id: uid("m"), type: "MX", court: i + 1, teamAIds, teamBIds, result: null, pointsA: 0, pointsB: 0, clutchA: false, clutchB: false };
+      return { id: uid("m"), type: "MX", court: i + 1, teamAIds, teamBIds, result: null, clutchA: false, clutchB: false };
     });
   }
 
@@ -852,36 +934,34 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
       const i = seenByType[m.type] || 0;
       seenByType[m.type] = i + 1;
       const old = oldByType[m.type] && oldByType[m.type][i];
-      if (old && old.result) return { ...m, id: old.id, result: old.result, pointsA: old.pointsA, pointsB: old.pointsB, clutchA: !!old.clutchA, clutchB: !!old.clutchB };
+      if (old && old.result) {
+        return {
+          ...m,
+          id: old.id,
+          result: normalizeResult(old.result),
+          clutchA: !!old.clutchA,
+          clutchB: !!old.clutchB,
+        };
+      }
       return m;
     });
   }
 
-  function pointsWithClutch(match, result) {
-    if (!result) return { pointsA: 0, pointsB: 0 };
-    const aWon = result.pointsA > result.pointsB;
-    const bWon = result.pointsB > result.pointsA;
-    return {
-      pointsA: result.pointsA + (match.clutchA && aWon ? 1 : 0),
-      pointsB: result.pointsB + (match.clutchB && bWon ? 1 : 0),
-    };
-  }
-
   function handleResult(matchId, result) {
-    const matches = roundState.matches.map((m) => {
-      if (m.id !== matchId) return m;
-      const points = pointsWithClutch(m, result);
-      return { ...m, result, ...points };
-    });
+    const matches = roundState.matches.map((match) =>
+      match.id === matchId
+        ? { ...match, result: normalizeResult(result) }
+        : match
+    );
     updateRound({ ...roundState, matches });
   }
 
   function handleClutch(matchId, side) {
     const field = side === "A" ? "clutchA" : "clutchB";
-    const matches = roundState.matches.map((m) => {
-      const next = { ...m, [field]: m.id === matchId };
-      return { ...next, ...pointsWithClutch(next, next.result) };
-    });
+    const matches = roundState.matches.map((match) => ({
+      ...match,
+      [field]: match.id === matchId,
+    }));
     updateRound({ ...roundState, matches });
     setClutchEditSide(null);
   }
@@ -905,7 +985,7 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Clutch match</p>
-            <p className="text-xs text-white/50 mt-1">Each team selects one match. A win earns one additional point.</p>
+            <p className="text-xs text-white/50 mt-1">Each team selects one match. If that team wins, clutch scoring applies: 2–0 awards 6–0 and 2–1 awards 4–2.</p>
           </div>
           {clutchEditSide && (
             <button onClick={() => setClutchEditSide(null)} className="text-xs px-3 py-1.5 rounded-lg border border-white/15 text-white/60">Cancel</button>
@@ -959,9 +1039,7 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
           court: i + 1,
           teamAIds,
           teamBIds,
-          result: existing?.result || null,
-          pointsA: existing?.pointsA || 0,
-          pointsB: existing?.pointsB || 0,
+          result: normalizeResult(existing?.result || null),
           clutchA: false,
           clutchB: false,
         };
@@ -1194,10 +1272,13 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
 ----------------------------------------------------------------*/
 function Scoreboard({ teams, roundsState }) {
   let totalA = 0, totalB = 0;
-  Object.values(roundsState).forEach((r) => r.matches.forEach((m) => {
-    totalA += m.pointsA;
-    totalB += m.pointsB;
-  }));
+  Object.values(roundsState).forEach((round) =>
+    round.matches.forEach((match) => {
+      const points = calculateMatchPoints(match, match.result);
+      totalA += points.pointsA;
+      totalB += points.pointsB;
+    })
+  );
 
   return (
     <section
@@ -1318,18 +1399,116 @@ function RoundTabs({ activeRound, setActiveRound, roundsState, allowedRoundIds =
    APP
 ----------------------------------------------------------------*/
 export default function App() {
-  const [savedTournament] = useState(() => loadSavedTournament());
-  const [phase, setPhase] = useState(() => savedTournament?.phase || "roster");
-  const [players, setPlayers] = useState(() => savedTournament?.players || []);
-  const [teams, setTeams] = useState(() => savedTournament?.teams || emptyTeams());
-  const [roundsState, setRoundsState] = useState(() => savedTournament?.roundsState || initRoundsState());
-  const [activeRound, setActiveRound] = useState(() => savedTournament?.activeRound || 1);
-  const [pairingRoundIdx, setPairingRoundIdx] = useState(() => savedTournament?.pairingRoundIdx || 1);
-  const [saveStatus, setSaveStatus] = useState(savedTournament ? "Tournament restored" : "Autosave ready");
+  const [phase, setPhase] = useState("roster");
+  const [players, setPlayers] = useState([]);
+  const [teams, setTeams] = useState(emptyTeams());
+  const [roundsState, setRoundsState] = useState(initRoundsState());
+  const [activeRound, setActiveRound] = useState(1);
+  const [pairingRoundIdx, setPairingRoundIdx] = useState(1);
+  const [saveStatus, setSaveStatus] = useState("Connecting to shared tournament…");
+  const [cloudReady, setCloudReady] = useState(false);
 
+  // Prevent a state update received from Supabase from immediately being
+  // written back to Supabase as a duplicate update.
+  const applyingRemoteUpdate = useRef(false);
+
+  function applyTournamentState(rawState) {
+    if (!rawState || typeof rawState !== "object") return;
+
+    const saved = normalizeSavedTournament(rawState);
+
+    if (saved.phase) setPhase(saved.phase);
+    if (Array.isArray(saved.players)) setPlayers(saved.players);
+    if (saved.teams) setTeams(saved.teams);
+    if (saved.roundsState) setRoundsState(saved.roundsState);
+    if (saved.activeRound) setActiveRound(saved.activeRound);
+    if (saved.pairingRoundIdx) setPairingRoundIdx(saved.pairingRoundIdx);
+  }
+
+  // Step 9: load the shared tournament from Supabase when the app opens.
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadTournament() {
+      setSaveStatus("Loading shared tournament…");
+
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select("state")
+        .eq("id", TOURNAMENT_ID)
+        .single();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error("Unable to load tournament:", error);
+        setSaveStatus("Cloud load failed — changes are not synchronized");
+        setCloudReady(true);
+        return;
+      }
+
+      if (data?.state && Object.keys(data.state).length > 0) {
+        applyingRemoteUpdate.current = true;
+        applyTournamentState(data.state);
+      }
+
+      setCloudReady(true);
+      setSaveStatus("Shared tournament connected");
+    }
+
+    loadTournament();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Step 10: listen for updates made on other devices.
+  useEffect(() => {
+    if (!cloudReady) return undefined;
+
+    const channel = supabase
+      .channel(`tournament-${TOURNAMENT_ID}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "tournaments",
+          filter: `id=eq.${TOURNAMENT_ID}`,
+        },
+        (payload) => {
+          const incomingState = payload.new?.state;
+          if (!incomingState) return;
+
+          applyingRemoteUpdate.current = true;
+          applyTournamentState(incomingState);
+          setSaveStatus("Updated from another device");
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setSaveStatus("Live synchronization active");
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [cloudReady]);
+
+  // Save changes to Supabase after a short delay.
+  useEffect(() => {
+    if (!cloudReady) return undefined;
+
+    if (applyingRemoteUpdate.current) {
+      applyingRemoteUpdate.current = false;
+      return undefined;
+    }
+
     const snapshot = {
-      version: 2,
+      version: 6,
+      scoringVersion: "single-source-v6",
       savedAt: new Date().toISOString(),
       phase,
       players,
@@ -1339,14 +1518,47 @@ export default function App() {
       pairingRoundIdx,
     };
 
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-      setSaveStatus("Saved automatically");
-    } catch (error) {
-      console.warn("Could not save tournament:", error);
-      setSaveStatus("Autosave unavailable");
-    }
-  }, [phase, players, teams, roundsState, activeRound, pairingRoundIdx]);
+    const timer = window.setTimeout(async () => {
+      setSaveStatus("Saving shared tournament…");
+
+      const { error } = await supabase
+        .from("tournaments")
+        .upsert(
+          {
+            id: TOURNAMENT_ID,
+            name: "The Yuko Cup",
+            state: snapshot,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
+
+      if (error) {
+        console.error("Unable to save tournament:", error);
+        setSaveStatus("Cloud save failed");
+        return;
+      }
+
+      // Optional local backup only. Supabase remains the source of truth.
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+      } catch (localError) {
+        console.warn("Could not create local backup:", localError);
+      }
+
+      setSaveStatus("Saved and synchronized");
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    cloudReady,
+    phase,
+    players,
+    teams,
+    roundsState,
+    activeRound,
+    pairingRoundIdx,
+  ]);
 
   function goToTeams() {
     const captains = players.filter((p) => p.isCaptain);
@@ -1388,7 +1600,7 @@ export default function App() {
     setRoundsState(initRoundsState());
     setActiveRound(1);
     setPairingRoundIdx(1);
-    setSaveStatus("Tournament reset");
+    setSaveStatus("Resetting shared tournament…");
   }
 
   const allStandardRoundsReadyForDreambreaker = [1, 2, 3, 4].every((roundId) => {
@@ -1411,6 +1623,25 @@ export default function App() {
     const rs = roundsState[r.id];
     return rs.matches.length > 0 && rs.matches.every((m) => m.result);
   });
+
+  if (!cloudReady) {
+    return (
+      <div
+        style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}
+        className="flex items-center justify-center px-6"
+      >
+        <div className="text-center">
+          <p
+            style={{ fontFamily: DISPLAY_FONT }}
+            className="text-3xl font-black tracking-[0.08em] text-white"
+          >
+            THE YUKO <span className="text-[#F5A416]">CUP</span>
+          </p>
+          <p className="mt-3 text-sm text-white/45">Loading shared tournament…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}>
@@ -1519,7 +1750,13 @@ export default function App() {
                 <p style={{ fontFamily: DISPLAY_FONT }} className="text-2xl tracking-wide">
                   {(() => {
                     let a = 0, b = 0;
-                    Object.values(roundsState).forEach((r) => r.matches.forEach((m) => { a += m.pointsA; b += m.pointsB; }));
+                    Object.values(roundsState).forEach((round) =>
+                      round.matches.forEach((match) => {
+                        const points = calculateMatchPoints(match, match.result);
+                        a += points.pointsA;
+                        b += points.pointsB;
+                      })
+                    );
                     if (a === b) return "IT'S A TIE";
                     return a > b ? `${teams.A.name.toUpperCase()} WINS THE CUP` : `${teams.B.name.toUpperCase()} WINS THE CUP`;
                   })()}
