@@ -1534,7 +1534,7 @@ function SpectatorPlayerStack({ names, color }) {
   return (
     <div className="spectator-player min-w-0 font-bold" style={{ color }}>
       {names.map((name, index) => (
-        <div key={`${name}-${index}`} className="truncate">{name}</div>
+        <div key={`${name}-${index}`} className="spectator-player-name">{name}</div>
       ))}
     </div>
   );
@@ -1577,12 +1577,30 @@ function SpectatorMatchCard({ match, teams, players }) {
         className="spectator-card-grid grid h-full items-center px-2.5 py-2 sm:px-4"
         style={{ gridTemplateColumns: "42px 18px minmax(0,1fr) 22px minmax(0,1fr) 18px 76px" }}
       >
-        <div className="flex h-full flex-col items-center justify-center border-r border-white/20 pr-2">
-          <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] text-white/70">Court</span>
-          <span className="spectator-court-number mt-0.5 font-black leading-none text-white"
-            style={{ fontFamily: DISPLAY_FONT }}>
+        <div className="spectator-court-cell relative flex h-full flex-col items-center justify-center pr-2">
+          <span
+            className="spectator-court-label font-bold uppercase tracking-[0.08em] text-white/70"
+            style={{ fontSize: 9, lineHeight: 1 }}
+          >
+            Court
+          </span>
+          <span
+            className="spectator-court-number mt-1 font-black leading-none text-white"
+            style={{ fontFamily: DISPLAY_FONT }}
+          >
             {match.court}
           </span>
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 0,
+              top: "10%",
+              bottom: "10%",
+              width: 1,
+              backgroundColor: "rgba(255,255,255,.28)",
+            }}
+          />
         </div>
 
         <div className="flex items-center justify-center">
@@ -1591,7 +1609,7 @@ function SpectatorMatchCard({ match, teams, players }) {
 
         <SpectatorPlayerStack names={aNames} color={TEAM.A.bg} />
 
-        <div className="text-center text-[12px] sm:text-[14px] font-black text-white"
+        <div className="text-center text-[11px] sm:text-[13px] font-black text-white"
           style={{ fontFamily: DISPLAY_FONT }}>
           VS
         </div>
@@ -1694,7 +1712,7 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
         }
 
         .spectator-score-shell {
-          width: min(100%, 1460px);
+          width: min(100%, 820px);
           margin: 0 auto;
         }
 
@@ -1713,8 +1731,15 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
         }
 
         .spectator-player {
-          font-size: clamp(18px, 2.5vw, 23px);
+          font-size: clamp(16px, 2.2vw, 22px);
           line-height: 1.12;
+        }
+
+        .spectator-player-name {
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+          overflow-wrap: anywhere;
         }
 
         .spectator-card {
@@ -1746,8 +1771,8 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
         }
 
         .spectator-clutch-icon {
-          width: clamp(16px, 1.5vw, 28px);
-          height: clamp(16px, 1.5vw, 28px);
+          width: clamp(16px, 1.25vw, 24px);
+          height: clamp(16px, 1.25vw, 24px);
         }
 
         .spectator-legend-icon {
@@ -1767,16 +1792,34 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
           }
 
           .spectator-card-grid {
-            grid-template-columns: 42px 18px minmax(0,1fr) 22px minmax(0,1fr) 18px 74px !important;
-            column-gap: 6px !important;
+            grid-template-columns:
+              44px 16px minmax(82px, 1fr) 22px minmax(82px, 1fr) 16px 72px !important;
+            column-gap: 5px !important;
           }
 
           .spectator-result-box {
-            min-width: 70px;
+            min-width: 68px;
           }
 
           .spectator-card {
             min-height: 72px;
+          }
+
+          .spectator-player {
+            font-size: clamp(14px, 4vw, 17px);
+          }
+
+          .spectator-court-label {
+            font-size: 8px !important;
+            line-height: 1 !important;
+          }
+
+          .spectator-court-number {
+            font-size: 28px !important;
+          }
+
+          .spectator-court-cell {
+            padding-right: 6px !important;
           }
         }
 
@@ -1786,7 +1829,7 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
           }
 
           .spectator-score-shell {
-            width: min(100%, 940px);
+            width: min(100%, 760px);
           }
 
           .spectator-content-shell {
@@ -1794,12 +1837,13 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
           }
 
           .spectator-card-grid {
-            grid-template-columns: 54px 24px minmax(160px,1fr) 30px minmax(160px,1fr) 24px 92px !important;
-            column-gap: 10px !important;
+            grid-template-columns:
+              54px 22px minmax(165px, 1fr) 30px minmax(165px, 1fr) 22px 90px !important;
+            column-gap: 9px !important;
           }
 
           .spectator-result-box {
-            min-width: 88px;
+            min-width: 86px;
           }
 
           .spectator-card {
@@ -1811,6 +1855,34 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
           .spectator-header-shell {
             width: min(94vw, 1560px);
           }
+
+          .spectator-score-shell {
+            width: min(72vw, 820px);
+          }
+
+          .spectator-content-shell {
+            width: min(78vw, 1120px);
+          }
+
+          .spectator-card-grid {
+            grid-template-columns:
+              64px 30px 230px 40px 230px 30px 108px !important;
+            column-gap: 12px !important;
+            justify-content: center;
+          }
+
+          .spectator-result-box {
+            min-width: 104px;
+          }
+
+          .spectator-card {
+            min-height: 82px;
+          }
+
+          .spectator-player {
+            font-size: clamp(19px, 1.1vw, 22px);
+          }
+        }
 
           .spectator-score-shell {
             width: min(92vw, 1460px);
