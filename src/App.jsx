@@ -462,14 +462,20 @@ function TeamSetup({ players, teams, setTeams, onContinue, onBack }) {
 /* ---------------------------------------------------------------
    PAIR POOL BUILDER (click-to-pair) — used for disclose & oppose
 ----------------------------------------------------------------*/
-function PairPoolBuilder({ roster, pattern, count, initial, onConfirm, onDraftChange, teamLabel }) {
+function PairPoolBuilder({ roster, pattern, count, initial, onConfirm, teamLabel }) {
   const [pairs, setPairsState] = useState(initial || []);
   const [pendingM, setPendingM] = useState(null);
   const [pendingSingle, setPendingSingle] = useState([]);
+  const [confirming, setConfirming] = useState(false);
 
   function setPairs(next) {
     setPairsState(next);
-    if (onDraftChange) onDraftChange(next);
+  }
+
+  function confirmPairs() {
+    if (confirming || pairs.length !== count) return;
+    setConfirming(true);
+    onConfirm([...pairs]);
   }
 
   const usedIds = new Set([...pairs.flat(), ...(pendingM ? [pendingM] : []), ...pendingSingle]);
@@ -553,10 +559,14 @@ function PairPoolBuilder({ roster, pattern, count, initial, onConfirm, onDraftCh
         {pairs.length === 0 && <p className="text-xs text-[#F4F7FA]/40">No pairs formed yet — click players above.</p>}
       </div>
 
-      <button onClick={() => onConfirm(pairs)} disabled={!done}
+      <button
+        type="button"
+        onClick={confirmPairs}
+        disabled={!done || confirming}
         className="px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-30"
-        style={{ backgroundColor: COURT }}>
-        Confirm pairs ({pairs.length}/{count})
+        style={{ backgroundColor: COURT }}
+      >
+        {confirming ? "Confirming…" : `Confirm pairs (${pairs.length}/${count})`}
       </button>
     </div>
   );
@@ -966,6 +976,16 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
     setClutchEditSide(null);
   }
 
+  function clearClutch(side) {
+    const field = side === "A" ? "clutchA" : "clutchB";
+    const matches = roundState.matches.map((match) => ({
+      ...match,
+      [field]: false,
+    }));
+    updateRound({ ...roundState, matches });
+    setClutchEditSide(null);
+  }
+
   function renderClutchControl() {
     const selectedA = roundState.matches.find((m) => m.clutchA);
     const selectedB = roundState.matches.find((m) => m.clutchB);
@@ -1003,13 +1023,25 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
                     <p className="text-sm text-white mt-1 truncate">{selectedName(selected, side)}</p>
                   </div>
                   {!isEditing && (
-                    <button
-                      onClick={() => setClutchEditSide(side)}
-                      className="text-xs px-3 py-2 rounded-lg border shrink-0"
-                      style={{ color: TEAM[side].bg, borderColor: `${TEAM[side].bg}66` }}
-                    >
-                      {selected ? "Edit clutch" : "Choose clutch"}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setClutchEditSide(side)}
+                        className="text-xs px-3 py-2 rounded-lg border"
+                        style={{ color: TEAM[side].bg, borderColor: `${TEAM[side].bg}66` }}
+                      >
+                        {selected ? "Edit clutch" : "Choose clutch"}
+                      </button>
+                      {selected && (
+                        <button
+                          type="button"
+                          onClick={() => clearClutch(side)}
+                          className="text-xs px-3 py-2 rounded-lg border border-white/15 text-white/45 hover:text-white/75 hover:border-white/25 transition"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                   )}
                   {isEditing && <span className="text-[10px] uppercase tracking-wide text-white/45 shrink-0">Choose below</span>}
                 </div>
@@ -1209,9 +1241,6 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
             count={step.count}
             initial={confirmedPairs}
             onConfirm={(pairs) => handleConfirmKey(side, step.key, pairs)}
-            onDraftChange={isEditingThis ? undefined : (pairs) => updateRound(isDisclose
-              ? { ...roundState, disclosed: { ...collected, [step.key]: pairs } }
-              : { ...roundState, opposed: { ...collected, [step.key]: pairs } })}
             teamLabel={teamLabel}
           />
         </div>
