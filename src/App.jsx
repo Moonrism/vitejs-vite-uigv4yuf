@@ -1919,7 +1919,8 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
           }
 
           .spectator-result-number {
-            font-size: 15px !important;
+            font-size: 21px !important;
+            line-height: 1 !important;
           }
 
           .spectator-section-title {
