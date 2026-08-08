@@ -1544,7 +1544,7 @@ function SpectatorResultBox({ match, points }) {
   if (!match.result) {
     return (
       <div className="spectator-result-box flex h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0A0F14] px-2 text-center">
-        <span className="text-[9px] sm:text-[10px] font-bold uppercase leading-tight tracking-[0.08em] text-white/65">
+        <span className="spectator-awaiting-label text-[9px] sm:text-[10px] font-bold uppercase leading-tight tracking-[0.08em] text-white/65">
           Awaiting<br />Result
         </span>
       </div>
@@ -1622,8 +1622,25 @@ function SpectatorMatchCard({ match, teams, players }) {
 }
 
 function SpectatorView({ teams, players, roundsState, saveStatus }) {
+  const standardRoundsReadyForDreambreaker = [1, 2, 3, 4].every((roundId) => {
+    const state = roundsState[roundId];
+    const allResultsEntered =
+      state?.matches?.length > 0 && state.matches.every((match) => match.result);
+    const bothClutchMatchesSelected =
+      state?.matches?.some((match) => match.clutchA) &&
+      state?.matches?.some((match) => match.clutchB);
+
+    return allResultsEntered && bothClutchMatchesSelected;
+  });
+
   const availableRoundIds = ROUND_META
-    .filter((round) => roundsState[round.id]?.matches?.length > 0)
+    .filter((round) => {
+      const hasCreatedMatches = roundsState[round.id]?.matches?.length > 0;
+      if (round.id === 5) {
+        return hasCreatedMatches || standardRoundsReadyForDreambreaker;
+      }
+      return hasCreatedMatches;
+    })
     .map((round) => round.id);
 
   const [spectatorRound, setSpectatorRound] = useState(availableRoundIds[0] || 1);
@@ -1914,12 +1931,13 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
             line-height: 1 !important;
           }
 
-          .spectator-result-mobile .spectator-result-box span:first-child {
+          .spectator-result-mobile .spectator-awaiting-label {
             font-size: 8px !important;
+            line-height: 1.05 !important;
           }
 
           .spectator-result-number {
-            font-size: 21px !important;
+            font-size: 22px !important;
             line-height: 1 !important;
           }
 
@@ -2150,6 +2168,19 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
                     </section>
                   );
                 })}
+              </div>
+            ) : selectedMeta?.type === "dreambreaker" &&
+              (selectedRound?.matches || []).length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-[#0F151B] px-5 py-8 text-center">
+                <p
+                  className="text-[20px] sm:text-[24px] font-black uppercase tracking-[0.04em] text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}
+                >
+                  Dreambreaker Matchups Coming Soon
+                </p>
+                <p className="mt-2 text-xs sm:text-sm text-white/45">
+                  Round 5 is unlocked. Matchups will appear here automatically as they are confirmed.
+                </p>
               </div>
             ) : (
               <div className="grid gap-2">
