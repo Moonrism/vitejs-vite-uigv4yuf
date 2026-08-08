@@ -684,7 +684,13 @@ function MatchCard({
             <span className="text-white/35"> / </span>
             <span style={{ color: TEAM.B.bg }}>{teams.B.name} +{displayedPoints.pointsB}</span>
           </p>
-          <button onClick={() => onResult(match.id, null)} className="text-xs underline text-white/50 shrink-0">Change result</button>
+          <button
+            type="button"
+            onClick={() => onResult(match.id, null)}
+            className="text-xs underline text-white/50 shrink-0"
+          >
+            Change result
+          </button>
         </div>
       ) : isDB ? (
         <div className="px-4 py-3 grid grid-cols-2 gap-2 bg-[#0D1218]">
@@ -958,31 +964,37 @@ function RoundPanel({ meta, roundState, teams, players, updateRound }) {
   }
 
   function handleResult(matchId, result) {
-    const matches = roundState.matches.map((match) =>
-      match.id === matchId
-        ? { ...match, result: normalizeResult(result) }
-        : match
-    );
-    updateRound({ ...roundState, matches });
+    updateRound((currentRound) => ({
+      ...currentRound,
+      matches: currentRound.matches.map((match) =>
+        match.id === matchId
+          ? { ...match, result: normalizeResult(result) }
+          : match
+      ),
+    }));
   }
 
   function handleClutch(matchId, side) {
     const field = side === "A" ? "clutchA" : "clutchB";
-    const matches = roundState.matches.map((match) => ({
-      ...match,
-      [field]: match.id === matchId,
+    updateRound((currentRound) => ({
+      ...currentRound,
+      matches: currentRound.matches.map((match) => ({
+        ...match,
+        [field]: match.id === matchId,
+      })),
     }));
-    updateRound({ ...roundState, matches });
     setClutchEditSide(null);
   }
 
   function clearClutch(side) {
     const field = side === "A" ? "clutchA" : "clutchB";
-    const matches = roundState.matches.map((match) => ({
-      ...match,
-      [field]: false,
+    updateRound((currentRound) => ({
+      ...currentRound,
+      matches: currentRound.matches.map((match) => ({
+        ...match,
+        [field]: false,
+      })),
     }));
-    updateRound({ ...roundState, matches });
     setClutchEditSide(null);
   }
 
@@ -1441,6 +1453,30 @@ export default function App() {
   // written back to Supabase as a duplicate update.
   const applyingRemoteUpdate = useRef(false);
 
+  // Track synchronization timestamps so this admin does not re-apply its own
+  // Supabase echo or let an older cloud snapshot overwrite a fresh local click.
+  const lastLocalSaveId = useRef(null);
+  const latestAcceptedSavedAtMs = useRef(0);
+  const localPendingSavedAtMs = useRef(0);
+
+  function savedAtMs(state) {
+    const ms = Date.parse(state?.savedAt || "");
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  // Mark a local edit immediately, before React has rendered and before the
+  // debounced Supabase save effect runs. This closes the small race window in
+  // which an older realtime snapshot could otherwise restore a result that the
+  // director has just cleared with "Change result", or undo a fresh winner/
+  // clutch selection.
+  function markLocalMutationIntent() {
+    localPendingSavedAtMs.current = Math.max(
+      localPendingSavedAtMs.current,
+      Date.now()
+    );
+    setSaveStatus("Local change pending…");
+  }
+
   function applyTournamentState(rawState) {
     if (!rawState || typeof rawState !== "object") return;
 
@@ -1478,6 +1514,10 @@ export default function App() {
 
       if (data?.state && Object.keys(data.state).length > 0) {
         applyingRemoteUpdate.current = true;
+        latestAcceptedSavedAtMs.current = Math.max(
+          latestAcceptedSavedAtMs.current,
+          savedAtMs(data.state)
+        );
         applyTournamentState(data.state);
       }
 
@@ -1510,7 +1550,43 @@ export default function App() {
           const incomingState = payload.new?.state;
           if (!incomingState) return;
 
+          const incomingSavedAt = incomingState.savedAt || null;
+          const incomingSavedAtMs = savedAtMs(incomingState);
+
+          // Supabase broadcasts this admin's own UPDATE back to the same client.
+          // Ignore that echo; the local React state is already authoritative.
+          if (incomingSavedAt && incomingSavedAt === lastLocalSaveId.current) {
+            latestAcceptedSavedAtMs.current = Math.max(
+              latestAcceptedSavedAtMs.current,
+              incomingSavedAtMs
+            );
+            setSaveStatus("Saved and synchronized");
+            return;
+          }
+
+          // While a local change is waiting for the debounce/save, do not allow
+          // an older cloud event to undo the user's just-entered result/clutch.
+          if (
+            localPendingSavedAtMs.current > 0 &&
+            incomingSavedAtMs > 0 &&
+            incomingSavedAtMs <= localPendingSavedAtMs.current
+          ) {
+            return;
+          }
+
+          // Ignore stale/replayed cloud snapshots.
+          if (
+            incomingSavedAtMs > 0 &&
+            incomingSavedAtMs <= latestAcceptedSavedAtMs.current
+          ) {
+            return;
+          }
+
           applyingRemoteUpdate.current = true;
+          latestAcceptedSavedAtMs.current = Math.max(
+            latestAcceptedSavedAtMs.current,
+            incomingSavedAtMs
+          );
           applyTournamentState(incomingState);
           setSaveStatus("Updated from another device");
         }
@@ -1535,10 +1611,18 @@ export default function App() {
       return undefined;
     }
 
+    const localSavedAt = new Date().toISOString();
+    const localSavedAtMs = Date.parse(localSavedAt);
+
+    // Mark this snapshot as the newest local intent before the 600 ms debounce.
+    // This protects a fresh click from an older realtime event during that gap.
+    lastLocalSaveId.current = localSavedAt;
+    localPendingSavedAtMs.current = localSavedAtMs;
+
     const snapshot = {
       version: 6,
       scoringVersion: "single-source-v6",
-      savedAt: new Date().toISOString(),
+      savedAt: localSavedAt,
       phase,
       players,
       teams,
@@ -1564,6 +1648,9 @@ export default function App() {
 
       if (error) {
         console.error("Unable to save tournament:", error);
+        if (lastLocalSaveId.current === localSavedAt) {
+          localPendingSavedAtMs.current = 0;
+        }
         setSaveStatus("Cloud save failed");
         return;
       }
@@ -1575,6 +1662,13 @@ export default function App() {
         console.warn("Could not create local backup:", localError);
       }
 
+      latestAcceptedSavedAtMs.current = Math.max(
+        latestAcceptedSavedAtMs.current,
+        localSavedAtMs
+      );
+      if (lastLocalSaveId.current === localSavedAt) {
+        localPendingSavedAtMs.current = 0;
+      }
       setSaveStatus("Saved and synchronized");
     }, 600);
 
@@ -1598,10 +1692,21 @@ export default function App() {
     setPhase("teams");
   }
 
-  function updateRoundDuringPairing(roundId, next) {
+  function updateRoundDuringPairing(roundId, nextOrUpdater) {
+    // Protect the local edit immediately from a stale realtime snapshot.
+    markLocalMutationIntent();
+
     // Keep the user on the current round after the final pairing is confirmed
     // so the newly generated match cards can be reviewed before moving on.
-    setRoundsState((current) => ({ ...current, [roundId]: next }));
+    setRoundsState((current) => {
+      const currentRound = current[roundId];
+      const next =
+        typeof nextOrUpdater === "function"
+          ? nextOrUpdater(currentRound)
+          : nextOrUpdater;
+
+      return { ...current, [roundId]: next };
+    });
   }
 
   function continueFromPairingRound(roundId) {
@@ -1809,8 +1914,27 @@ export default function App() {
                       <p className="text-xs text-[#F4F7FA]/50 mt-1">Enter results as matches finish.</p>
                     </div>
                   )}
-                  <RoundPanel meta={meta} roundState={rs} teams={teams} players={players}
-                    updateRound={(next) => setRoundsState({ ...roundsState, [meta.id]: next })} />
+                  <RoundPanel
+                    meta={meta}
+                    roundState={rs}
+                    teams={teams}
+                    players={players}
+                    updateRound={(nextOrUpdater) => {
+                      // This runs synchronously on the click, including
+                      // "Change result", before Supabase can echo stale state.
+                      markLocalMutationIntent();
+
+                      setRoundsState((current) => {
+                        const currentRound = current[meta.id];
+                        const next =
+                          typeof nextOrUpdater === "function"
+                            ? nextOrUpdater(currentRound)
+                            : nextOrUpdater;
+
+                        return { ...current, [meta.id]: next };
+                      });
+                    }}
+                  />
 
                   {meta.id === 4 && (
                     <div className="mt-6 rounded-2xl border border-white/10 bg-[#0D1218] p-4">
