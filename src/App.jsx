@@ -1893,10 +1893,12 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
 
           .spectator-result-mobile {
             display: flex;
-            justify-content: flex-end;
+            justify-content: center;
+            align-items: center;
             border-top: 1px solid rgba(255,255,255,.07);
             padding: 4px 8px 5px;
             min-height: 26px;
+            text-align: center;
           }
 
           .spectator-result-mobile .spectator-result-box {
