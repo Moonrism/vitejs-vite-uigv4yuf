@@ -1395,6 +1395,620 @@ function RoundTabs({ activeRound, setActiveRound, roundsState, allowedRoundIds =
   );
 }
 
+
+/* ---------------------------------------------------------------
+   SPECTATOR MODE — read-only live tournament view
+----------------------------------------------------------------*/
+
+function PawClutchIcon({ color, legend = false }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true"
+      className={legend ? "spectator-legend-icon" : "spectator-clutch-icon"}
+      style={{ color, flex: "0 0 auto" }}>
+      <ellipse cx="32" cy="40" rx="16" ry="13" fill="currentColor" />
+      <ellipse cx="14" cy="24" rx="7" ry="9" transform="rotate(-22 14 24)" fill="currentColor" />
+      <ellipse cx="27" cy="17" rx="7" ry="9" transform="rotate(-6 27 17)" fill="currentColor" />
+      <ellipse cx="39" cy="17" rx="7" ry="9" transform="rotate(6 39 17)" fill="currentColor" />
+      <ellipse cx="52" cy="24" rx="7" ry="9" transform="rotate(22 52 24)" fill="currentColor" />
+    </svg>
+  );
+}
+
+function VikingClutchIcon({ color, legend = false }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true"
+      className={legend ? "spectator-legend-icon" : "spectator-clutch-icon"}
+      style={{ color, flex: "0 0 auto" }}>
+      <path
+        d="M14 30c-7-5-10-13-8-22 5 9 10 13 17 15-3 2-6 4-9 7Zm36 0c7-5 10-13 8-22-5 9-10 13-17 15 3 2 6 4 9 7Z"
+        fill="currentColor"
+      />
+      <path d="M16 31c0-10 7-18 16-18s16 8 16 18v11H16V31Z" fill="currentColor" />
+      <path d="M10 40h44v8H10z" fill="currentColor" />
+      <path d="M29 16h6v24h-6z" fill="#080B0F" opacity=".82" />
+    </svg>
+  );
+}
+
+function SpectatorRoundProgress({ activeRound, setActiveRound, roundsState, allowedRoundIds }) {
+  const visibleRounds = ROUND_META.filter((round) => allowedRoundIds.includes(round.id));
+
+  return (
+    <div className="border-y border-white/10 bg-[#080B0F]">
+      <div
+        className="mx-auto flex w-full items-start px-4 py-3"
+        style={{ maxWidth: 780 }}
+      >
+        {visibleRounds.map((round, index) => {
+          const state = roundsState[round.id];
+          const complete =
+            state.matches.length > 0 &&
+            state.matches.every((match) => match.result);
+          const active = activeRound === round.id;
+
+          return (
+            <React.Fragment key={round.id}>
+              <button
+                type="button"
+                onClick={() => setActiveRound(round.id)}
+                className="flex shrink-0 flex-col items-center"
+                style={{ width: 42 }}
+                aria-label={`${round.label}: ${round.subtitle}`}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full font-black leading-none"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    fontFamily: DISPLAY_FONT,
+                    fontSize: 13,
+                    border: `2px solid ${
+                      complete || active ? "#39D47A" : "rgba(255,255,255,.38)"
+                    }`,
+                    backgroundColor: complete ? "#39D47A" : "#080B0F",
+                    color: "#FFFFFF",
+                    boxShadow:
+                      active && !complete
+                        ? "0 0 0 2px rgba(57,212,122,.12)"
+                        : "none",
+                  }}
+                >
+                  {complete ? "✓" : round.id}
+                </span>
+
+                <span
+                  className="mt-1 font-bold uppercase"
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: ".04em",
+                    color: active || complete
+                      ? "#FFFFFF"
+                      : "rgba(255,255,255,.65)",
+                  }}
+                >
+                  R{round.id}
+                </span>
+              </button>
+
+              {index < visibleRounds.length - 1 && (
+                <div
+                  className="relative flex-1"
+                  style={{
+                    height: 32,
+                    minWidth: 24,
+                  }}
+                  aria-hidden="true"
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 4,
+                      right: 4,
+                      top: 15,
+                      height: 2,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(255,255,255,.30)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: complete ? "100%" : "0%",
+                        backgroundColor: "#39D47A",
+                        borderRadius: 999,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SpectatorPlayerStack({ names, color }) {
+  return (
+    <div className="spectator-player min-w-0 font-bold" style={{ color }}>
+      {names.map((name, index) => (
+        <div key={`${name}-${index}`} className="truncate">{name}</div>
+      ))}
+    </div>
+  );
+}
+
+function SpectatorResultBox({ match, points }) {
+  if (!match.result) {
+    return (
+      <div className="spectator-result-box flex h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0A0F14] px-2 text-center">
+        <span className="text-[9px] sm:text-[10px] font-bold uppercase leading-tight tracking-[0.08em] text-white/65">
+          Awaiting<br />Result
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="spectator-result-box flex h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0A0F14] px-2">
+      <span className="spectator-result-number font-black tabular-nums"
+        style={{ fontFamily: DISPLAY_FONT, color: TEAM.A.bg }}>
+        {points.pointsA}
+      </span>
+      <span className="px-1.5 text-[15px] sm:text-[18px] font-black text-white">-</span>
+      <span className="spectator-result-number font-black tabular-nums"
+        style={{ fontFamily: DISPLAY_FONT, color: TEAM.B.bg }}>
+        {points.pointsB}
+      </span>
+    </div>
+  );
+}
+
+function SpectatorMatchCard({ match, teams, players }) {
+  const aNames = match.teamAIds.map((id) => playerName(players, id));
+  const bNames = match.teamBIds.map((id) => playerName(players, id));
+  const points = calculateMatchPoints(match, match.result);
+
+  return (
+    <div className="spectator-card rounded-2xl border border-white/10 bg-[#0F151B] shadow-[0_10px_28px_rgba(0,0,0,.16)]">
+      <div
+        className="spectator-card-grid grid h-full items-center px-2.5 py-2 sm:px-4"
+        style={{ gridTemplateColumns: "42px 18px minmax(0,1fr) 22px minmax(0,1fr) 18px 76px" }}
+      >
+        <div className="flex h-full flex-col items-center justify-center border-r border-white/20 pr-2">
+          <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] text-white/70">Court</span>
+          <span className="spectator-court-number mt-0.5 font-black leading-none text-white"
+            style={{ fontFamily: DISPLAY_FONT }}>
+            {match.court}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-center">
+          {match.clutchA && <PawClutchIcon color={TEAM.A.bg} />}
+        </div>
+
+        <SpectatorPlayerStack names={aNames} color={TEAM.A.bg} />
+
+        <div className="text-center text-[12px] sm:text-[14px] font-black text-white"
+          style={{ fontFamily: DISPLAY_FONT }}>
+          VS
+        </div>
+
+        <SpectatorPlayerStack names={bNames} color={TEAM.B.bg} />
+
+        <div className="flex items-center justify-center">
+          {match.clutchB && <VikingClutchIcon color={TEAM.B.bg} />}
+        </div>
+
+        <SpectatorResultBox match={match} points={points} />
+      </div>
+    </div>
+  );
+}
+
+function SpectatorView({ teams, players, roundsState, saveStatus }) {
+  const availableRoundIds = ROUND_META
+    .filter((round) => roundsState[round.id]?.matches?.length > 0)
+    .map((round) => round.id);
+
+  const [spectatorRound, setSpectatorRound] = useState(availableRoundIds[0] || 1);
+
+  useEffect(() => {
+    if (availableRoundIds.length > 0 && !availableRoundIds.includes(spectatorRound)) {
+      setSpectatorRound(availableRoundIds[0]);
+    }
+  }, [availableRoundIds.join(","), spectatorRound]);
+
+  const hasMatches = availableRoundIds.length > 0;
+  const selectedMeta = ROUND_META.find((round) => round.id === spectatorRound);
+  const selectedRound = roundsState[spectatorRound];
+
+  let totalA = 0;
+  let totalB = 0;
+  Object.values(roundsState).forEach((round) => {
+    round.matches.forEach((match) => {
+      const points = calculateMatchPoints(match, match.result);
+      totalA += points.pointsA;
+      totalB += points.pointsB;
+    });
+  });
+
+  const completedCount = Object.values(roundsState).reduce(
+    (count, round) => count + round.matches.filter((match) => match.result).length,
+    0
+  );
+  const totalMatches = Object.values(roundsState).reduce(
+    (count, round) => count + round.matches.length,
+    0
+  );
+
+  const allRoundsDone = ROUND_META.every((round) => {
+    const state = roundsState[round.id];
+    return state.matches.length > 0 && state.matches.every((match) => match.result);
+  });
+
+  const genderedGroups =
+    selectedMeta?.type === "gendered"
+      ? [
+          {
+            type: "F",
+            label: "Women's Doubles",
+            matches: (selectedRound?.matches || [])
+              .filter((match) => match.type === "F")
+              .sort((a, b) => a.court - b.court),
+          },
+          {
+            type: "M",
+            label: "Men's Doubles",
+            matches: (selectedRound?.matches || [])
+              .filter((match) => match.type === "M")
+              .sort((a, b) => a.court - b.court),
+          },
+        ]
+      : [];
+
+  return (
+    <div style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600&display=swap');
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #080B0F; }
+        button { font: inherit; letter-spacing: .025em; }
+        @keyframes liveGlow {
+          0%,100% { opacity: 1; box-shadow: 0 0 7px rgba(57,212,122,.95), 0 0 14px rgba(57,212,122,.42); }
+          50% { opacity: .72; box-shadow: 0 0 3px rgba(57,212,122,.7), 0 0 8px rgba(57,212,122,.25); }
+        }
+        .live-glow { animation: liveGlow 1.7s ease-in-out infinite; }
+
+        .spectator-shell {
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        .spectator-header-shell {
+          width: min(100%, 1560px);
+          margin: 0 auto;
+        }
+
+        .spectator-score-shell {
+          width: min(100%, 1460px);
+          margin: 0 auto;
+        }
+
+        .spectator-content-shell {
+          width: min(100%, 1220px);
+          margin: 0 auto;
+        }
+
+        .spectator-score {
+          font-size: clamp(72px, 11vw, 108px);
+          line-height: .74;
+        }
+
+        .spectator-team-name {
+          font-size: clamp(14px, 2.2vw, 20px);
+        }
+
+        .spectator-player {
+          font-size: clamp(18px, 2.5vw, 23px);
+          line-height: 1.12;
+        }
+
+        .spectator-card {
+          min-height: clamp(72px, 8.8vw, 88px);
+        }
+
+        .spectator-court-number {
+          font-size: clamp(30px, 4.5vw, 38px);
+        }
+
+        .spectator-section-title {
+          font-size: clamp(16px, 2.2vw, 20px);
+        }
+
+        .spectator-round-title {
+          font-size: clamp(24px, 3.2vw, 32px);
+        }
+
+        .spectator-round-subtitle {
+          font-size: clamp(17px, 2.6vw, 24px);
+        }
+
+        .spectator-result-number {
+          font-size: clamp(20px, 3vw, 26px);
+        }
+
+        .spectator-live-label {
+          font-size: clamp(9px, 1.15vw, 11px);
+        }
+
+        .spectator-clutch-icon {
+          width: clamp(16px, 1.5vw, 28px);
+          height: clamp(16px, 1.5vw, 28px);
+        }
+
+        .spectator-legend-icon {
+          width: clamp(12px, .8vw, 17px);
+          height: clamp(12px, .8vw, 17px);
+        }
+
+        .spectator-legend-text {
+          font-size: clamp(8px, .65vw, 10px);
+        }
+
+        @media (max-width: 600px) {
+          .spectator-header-shell,
+          .spectator-score-shell,
+          .spectator-content-shell {
+            width: 100%;
+          }
+
+          .spectator-card-grid {
+            grid-template-columns: 42px 18px minmax(0,1fr) 22px minmax(0,1fr) 18px 74px !important;
+            column-gap: 6px !important;
+          }
+
+          .spectator-result-box {
+            min-width: 70px;
+          }
+
+          .spectator-card {
+            min-height: 72px;
+          }
+        }
+
+        @media (min-width: 601px) and (max-width: 1024px) {
+          .spectator-header-shell {
+            width: min(100%, 980px);
+          }
+
+          .spectator-score-shell {
+            width: min(100%, 940px);
+          }
+
+          .spectator-content-shell {
+            width: min(100%, 900px);
+          }
+
+          .spectator-card-grid {
+            grid-template-columns: 54px 24px minmax(160px,1fr) 30px minmax(160px,1fr) 24px 92px !important;
+            column-gap: 10px !important;
+          }
+
+          .spectator-result-box {
+            min-width: 88px;
+          }
+
+          .spectator-card {
+            min-height: 80px;
+          }
+        }
+
+        @media (min-width: 1025px) {
+          .spectator-header-shell {
+            width: min(94vw, 1560px);
+          }
+
+          .spectator-score-shell {
+            width: min(92vw, 1460px);
+          }
+
+          .spectator-content-shell {
+            width: min(78vw, 1220px);
+          }
+
+          .spectator-card-grid {
+            grid-template-columns: 68px 36px 260px 44px 260px 36px 118px !important;
+            column-gap: 16px !important;
+            justify-content: center;
+          }
+
+          .spectator-result-box {
+            min-width: 110px;
+          }
+
+          .spectator-card {
+            min-height: 84px;
+          }
+
+          .spectator-player {
+            font-size: clamp(20px, 1.25vw, 24px);
+          }
+        }
+      `}</style>
+
+      <header className="border-b border-white/10 bg-[#080B0F]">
+        <div className="spectator-header-shell flex h-[52px] items-center justify-between px-4">
+          <div className="flex items-baseline gap-2" style={{ fontFamily: DISPLAY_FONT }}>
+            <span className="text-[19px] sm:text-xl font-extrabold tracking-[0.1em] text-white">THE YUKO</span>
+            <span className="text-[19px] sm:text-xl font-extrabold tracking-[0.1em] text-[#F5A416]">CUP</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span
+              className="live-glow rounded-full"
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                flex: "0 0 10px",
+                backgroundColor: "#39D47A",
+                boxShadow:
+                  "0 0 7px rgba(57,212,122,.95), 0 0 14px rgba(57,212,122,.42)",
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="spectator-live-label font-bold uppercase tracking-[0.08em]"
+              style={{ color: "#39D47A" }}
+            >
+              Live Match Centre
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {hasMatches && (
+        <>
+          <section className="border-b border-white/10 bg-[#080B0F]">
+            <div className="spectator-score-shell px-4 py-3 sm:py-4">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
+                <div className="min-w-0 text-center">
+                  <div className="spectator-team-name truncate font-black uppercase tracking-[0.07em]"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.A.bg }}>
+                    {teams.A.name || "TEAM A"}
+                  </div>
+                  <div className="spectator-score mt-1 font-black tabular-nums"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.A.bg }}>
+                    {totalA}
+                  </div>
+                </div>
+
+                <div className="pb-2 text-[26px] sm:text-[34px] font-black text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}>
+                  -
+                </div>
+
+                <div className="min-w-0 text-center">
+                  <div className="spectator-team-name truncate font-black uppercase tracking-[0.07em]"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.B.bg }}>
+                    {teams.B.name || "TEAM B"}
+                  </div>
+                  <div className="spectator-score mt-1 font-black tabular-nums"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.B.bg }}>
+                    {totalB}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <SpectatorRoundProgress
+            activeRound={spectatorRound}
+            setActiveRound={setSpectatorRound}
+            roundsState={roundsState}
+            allowedRoundIds={availableRoundIds}
+          />
+        </>
+      )}
+
+      <main className="spectator-content-shell px-3.5 py-4 sm:px-4 sm:py-6">
+        {!hasMatches ? (
+          <div className="mx-auto max-w-xl py-16 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#F5A416]/25 bg-[#F5A416]/5">
+              <Trophy size={28} className="text-[#F5A416]" />
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Live tournament</p>
+            <h1 style={{ fontFamily: DISPLAY_FONT }}
+              className="mt-2 text-4xl sm:text-5xl font-black tracking-[0.05em] text-white">
+              MATCHUPS COMING SOON
+            </h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/45">
+              Matchups will appear here automatically as the tournament is prepared.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h1 className="spectator-round-subtitle truncate font-black uppercase tracking-[0.025em] text-white"
+                style={{ fontFamily: DISPLAY_FONT }}>
+                {selectedMeta?.subtitle}
+              </h1>
+
+              <div className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.08em] text-white/55">
+                {completedCount}/{totalMatches} Final
+              </div>
+            </div>
+
+            {allRoundsDone && (
+              <div className="mb-5 overflow-hidden rounded-2xl border border-[#F5A416]/25 bg-[#15130D] px-5 py-4 text-center">
+                <Trophy className="mx-auto mb-1 text-[#F5A416]" />
+                <p className="text-[9px] uppercase tracking-[0.2em] text-white/35">Final result</p>
+                <p className="mt-1 text-2xl font-black tracking-[0.05em] text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}>
+                  {totalA === totalB
+                    ? "THE YUKO CUP ENDS IN A TIE"
+                    : totalA > totalB
+                      ? `${teams.A.name.toUpperCase()} WINS THE YUKO CUP`
+                      : `${teams.B.name.toUpperCase()} WINS THE YUKO CUP`}
+                </p>
+              </div>
+            )}
+
+            {selectedMeta?.type === "gendered" ? (
+              <div className="space-y-5">
+                {genderedGroups.map((group) => {
+                  if (group.matches.length === 0) return null;
+                  return (
+                    <section key={group.type}>
+                      <h2 className="spectator-section-title mb-2 font-black uppercase tracking-[0.07em] text-white"
+                        style={{ fontFamily: DISPLAY_FONT }}>
+                        {group.label}
+                      </h2>
+                      <div className="grid gap-2">
+                        {group.matches.map((match) => (
+                          <SpectatorMatchCard key={match.id} match={match} teams={teams} players={players} />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {(selectedRound?.matches || [])
+                  .slice()
+                  .sort((a, b) => a.court - b.court)
+                  .map((match) => (
+                    <SpectatorMatchCard key={match.id} match={match} teams={teams} players={players} />
+                  ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-center gap-4 uppercase tracking-[0.05em] text-white/40">
+              <div className="flex items-center gap-1.5">
+                <PawClutchIcon color={TEAM.A.bg} legend />
+                <span className="spectator-legend-text">= {teams.A.name || "Team A"} clutch</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <VikingClutchIcon color={TEAM.B.bg} legend />
+                <span className="spectator-legend-text">= {teams.B.name || "Team B"} clutch</span>
+              </div>
+            </div>
+          </>
+        )}
+      </main>
+
+      <footer className="pb-5 text-center">
+        <p className="text-[8px] uppercase tracking-[0.12em] text-white/20">{saveStatus}</p>
+      </footer>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------
    APP
 ----------------------------------------------------------------*/
@@ -1407,6 +2021,28 @@ export default function App() {
   const [pairingRoundIdx, setPairingRoundIdx] = useState(1);
   const [saveStatus, setSaveStatus] = useState("Connecting to shared tournament…");
   const [cloudReady, setCloudReady] = useState(false);
+  const [spectatorLinkCopied, setSpectatorLinkCopied] = useState(false);
+
+  const isDirector = useMemo(() => {
+    const mode = new URLSearchParams(window.location.search).get("mode");
+    return mode === "director";
+  }, []);
+
+  function getSpectatorUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "spectator");
+    return url.toString();
+  }
+
+  async function copySpectatorLink() {
+    try {
+      await navigator.clipboard.writeText(getSpectatorUrl());
+      setSpectatorLinkCopied(true);
+      window.setTimeout(() => setSpectatorLinkCopied(false), 1800);
+    } catch (error) {
+      console.warn("Could not copy spectator link:", error);
+    }
+  }
 
   // Prevent a state update received from Supabase from immediately being
   // written back to Supabase as a duplicate update.
@@ -1499,7 +2135,7 @@ export default function App() {
 
   // Save changes to Supabase after a short delay.
   useEffect(() => {
-    if (!cloudReady) return undefined;
+    if (!cloudReady || !isDirector) return undefined;
 
     if (applyingRemoteUpdate.current) {
       applyingRemoteUpdate.current = false;
@@ -1558,6 +2194,7 @@ export default function App() {
     roundsState,
     activeRound,
     pairingRoundIdx,
+    isDirector,
   ]);
 
   function goToTeams() {
@@ -1643,6 +2280,17 @@ export default function App() {
     );
   }
 
+  if (!isDirector) {
+    return (
+      <SpectatorView
+        teams={teams}
+        players={players}
+        roundsState={roundsState}
+        saveStatus={saveStatus}
+      />
+    );
+  }
+
   return (
     <div style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}>
       <style>{`
@@ -1667,7 +2315,16 @@ export default function App() {
             <span className="text-white text-xl font-extrabold tracking-[0.12em]">THE YUKO</span>
             <span className="text-[#F5A416] text-xl font-extrabold tracking-[0.12em]">CUP</span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em] px-3 py-1.5 rounded border border-[#F5A416]/45 text-[#F5A416]">Kitchen Cabinet</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={copySpectatorLink}
+              className="hidden sm:inline-flex text-[9px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded border border-white/15 text-white/50 hover:text-white/80 hover:border-white/25 transition"
+            >
+              {spectatorLinkCopied ? "Link copied" : "Copy spectator link"}
+            </button>
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] px-3 py-1.5 rounded border border-[#F5A416]/45 text-[#F5A416]">Director mode</span>
+          </div>
         </div>
       </header>
 
@@ -1829,6 +2486,7 @@ export default function App() {
 
       <div className="text-center pb-8 space-y-2">
         <p className="text-[10px] uppercase tracking-[0.14em] text-[#F4F7FA]/35">{saveStatus}</p>
+        <p className="text-[9px] uppercase tracking-[0.14em] text-[#F5A416]/55">Director controls · shared live tournament</p>
         <button onClick={resetAll} className="text-xs inline-flex items-center gap-1 text-[#F4F7FA]/40 hover:text-[#FF6464]">
           <RotateCcw size={12} /> Reset tournament
         </button>
