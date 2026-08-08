@@ -1399,145 +1399,228 @@ function RoundTabs({ activeRound, setActiveRound, roundsState, allowedRoundIds =
 /* ---------------------------------------------------------------
    SPECTATOR MODE — read-only live tournament view
 ----------------------------------------------------------------*/
+
+function PawClutchIcon({ color, legend = false }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true"
+      className={legend ? "spectator-legend-icon" : "spectator-clutch-icon"}
+      style={{ color, flex: "0 0 auto" }}>
+      <ellipse cx="32" cy="40" rx="16" ry="13" fill="currentColor" />
+      <ellipse cx="14" cy="24" rx="7" ry="9" transform="rotate(-22 14 24)" fill="currentColor" />
+      <ellipse cx="27" cy="17" rx="7" ry="9" transform="rotate(-6 27 17)" fill="currentColor" />
+      <ellipse cx="39" cy="17" rx="7" ry="9" transform="rotate(6 39 17)" fill="currentColor" />
+      <ellipse cx="52" cy="24" rx="7" ry="9" transform="rotate(22 52 24)" fill="currentColor" />
+    </svg>
+  );
+}
+
+function VikingClutchIcon({ color, legend = false }) {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true"
+      className={legend ? "spectator-legend-icon" : "spectator-clutch-icon"}
+      style={{ color, flex: "0 0 auto" }}>
+      <path
+        d="M14 30c-7-5-10-13-8-22 5 9 10 13 17 15-3 2-6 4-9 7Zm36 0c7-5 10-13 8-22-5 9-10 13-17 15 3 2 6 4 9 7Z"
+        fill="currentColor"
+      />
+      <path d="M16 31c0-10 7-18 16-18s16 8 16 18v11H16V31Z" fill="currentColor" />
+      <path d="M10 40h44v8H10z" fill="currentColor" />
+      <path d="M29 16h6v24h-6z" fill="#080B0F" opacity=".82" />
+    </svg>
+  );
+}
+
+function SpectatorRoundProgress({ activeRound, setActiveRound, roundsState, allowedRoundIds }) {
+  const visibleRounds = ROUND_META.filter((round) => allowedRoundIds.includes(round.id));
+
+  return (
+    <div className="border-y border-white/10 bg-[#080B0F]">
+      <div
+        className="mx-auto flex w-full items-start px-4 py-3"
+        style={{ maxWidth: 780 }}
+      >
+        {visibleRounds.map((round, index) => {
+          const state = roundsState[round.id];
+          const complete =
+            state.matches.length > 0 &&
+            state.matches.every((match) => match.result);
+          const active = activeRound === round.id;
+
+          return (
+            <React.Fragment key={round.id}>
+              <button
+                type="button"
+                onClick={() => setActiveRound(round.id)}
+                className="flex shrink-0 flex-col items-center"
+                style={{ width: 42 }}
+                aria-label={`${round.label}: ${round.subtitle}`}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full font-black leading-none"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    fontFamily: DISPLAY_FONT,
+                    fontSize: 13,
+                    border: `2px solid ${
+                      complete || active ? "#39D47A" : "rgba(255,255,255,.38)"
+                    }`,
+                    backgroundColor: complete ? "#39D47A" : "#080B0F",
+                    color: "#FFFFFF",
+                    boxShadow:
+                      active && !complete
+                        ? "0 0 0 2px rgba(57,212,122,.12)"
+                        : "none",
+                  }}
+                >
+                  {complete ? "✓" : round.id}
+                </span>
+
+                <span
+                  className="mt-1 font-bold uppercase"
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: ".04em",
+                    color: active || complete
+                      ? "#FFFFFF"
+                      : "rgba(255,255,255,.65)",
+                  }}
+                >
+                  R{round.id}
+                </span>
+              </button>
+
+              {index < visibleRounds.length - 1 && (
+                <div
+                  className="relative flex-1"
+                  style={{
+                    height: 32,
+                    minWidth: 24,
+                  }}
+                  aria-hidden="true"
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 4,
+                      right: 4,
+                      top: 15,
+                      height: 2,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(255,255,255,.30)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: complete ? "100%" : "0%",
+                        backgroundColor: "#39D47A",
+                        borderRadius: 999,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SpectatorPlayerStack({ names, color }) {
+  return (
+    <div className="spectator-player min-w-0 font-bold" style={{ color }}>
+      {names.map((name, index) => (
+        <div key={`${name}-${index}`} className="spectator-player-name">{name}</div>
+      ))}
+    </div>
+  );
+}
+
+function SpectatorResultBox({ match, points }) {
+  if (!match.result) {
+    return (
+      <div className="spectator-result-box flex h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0A0F14] px-2 text-center">
+        <span className="text-[9px] sm:text-[10px] font-bold uppercase leading-tight tracking-[0.08em] text-white/65">
+          Awaiting<br />Result
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="spectator-result-box flex h-[48px] items-center justify-center rounded-xl border border-white/10 bg-[#0A0F14] px-2">
+      <span className="spectator-result-number font-black tabular-nums"
+        style={{ fontFamily: DISPLAY_FONT, color: TEAM.A.bg }}>
+        {points.pointsA}
+      </span>
+      <span className="px-1.5 text-[15px] sm:text-[18px] font-black text-white">-</span>
+      <span className="spectator-result-number font-black tabular-nums"
+        style={{ fontFamily: DISPLAY_FONT, color: TEAM.B.bg }}>
+        {points.pointsB}
+      </span>
+    </div>
+  );
+}
+
 function SpectatorMatchCard({ match, teams, players }) {
-  const typeLabel = TYPE_LABEL[match.type];
-  const isDB = match.type === "DB";
   const aNames = match.teamAIds.map((id) => playerName(players, id));
   const bNames = match.teamBIds.map((id) => playerName(players, id));
   const points = calculateMatchPoints(match, match.result);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#11161D] shadow-[0_18px_45px_rgba(0,0,0,.16)]">
-      <div className="grid grid-cols-[76px_1fr] sm:grid-cols-[90px_1fr]">
-        <div className="flex flex-col items-center justify-center border-r border-white/10 bg-[#0B0F14] px-2 py-4">
-          <span className="text-[9px] uppercase tracking-[0.2em] text-white/35">Court</span>
+    <div className="spectator-card rounded-2xl border border-white/10 bg-[#0F151B] shadow-[0_10px_28px_rgba(0,0,0,.16)]">
+      <div
+        className="spectator-card-grid grid h-full items-center px-2.5 py-2 sm:px-4"
+        style={{ gridTemplateColumns: "42px 18px minmax(0,1fr) 22px minmax(0,1fr) 18px 76px" }}
+      >
+        <div className="spectator-court-cell relative flex h-full flex-col items-center justify-center pr-2">
           <span
-            className="mt-1 text-5xl sm:text-6xl font-black leading-none"
-            style={{ fontFamily: DISPLAY_FONT, color: COURT }}
+            className="spectator-court-label font-bold uppercase tracking-[0.08em] text-white/70"
+            style={{ fontSize: 9, lineHeight: 1 }}
+          >
+            Court
+          </span>
+          <span
+            className="spectator-court-number mt-1 font-black leading-none text-white"
+            style={{ fontFamily: DISPLAY_FONT }}
           >
             {match.court}
           </span>
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              right: 0,
+              top: "10%",
+              bottom: "10%",
+              width: 1,
+              backgroundColor: "rgba(255,255,255,.28)",
+            }}
+          />
         </div>
 
-        <div className="min-w-0 px-4 py-3 sm:px-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-[9px] uppercase tracking-[0.16em] text-white/35">
-              {typeLabel}
-            </span>
-            <div className="flex flex-wrap justify-end gap-1.5">
-              {match.clutchA && (
-                <span
-                  className="rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-wide"
-                  style={{
-                    color: TEAM.A.bg,
-                    borderColor: `${TEAM.A.bg}55`,
-                    backgroundColor: `${TEAM.A.bg}10`,
-                  }}
-                >
-                  ★ {teams.A.name} clutch
-                </span>
-              )}
-              {match.clutchB && (
-                <span
-                  className="rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-wide"
-                  style={{
-                    color: TEAM.B.bg,
-                    borderColor: `${TEAM.B.bg}55`,
-                    backgroundColor: `${TEAM.B.bg}10`,
-                  }}
-                >
-                  ★ {teams.B.name} clutch
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5">
-            <div className="min-w-0 text-right">
-              <p
-                className="truncate text-[9px] uppercase tracking-[0.13em] opacity-65"
-                style={{ color: TEAM.A.bg }}
-              >
-                {teams.A.name || "Team A"}
-              </p>
-              {isDB ? (
-                <div
-                  className="mt-1 space-y-0.5 text-base sm:text-lg font-bold leading-tight"
-                  style={{ color: TEAM.A.bg }}
-                >
-                  {aNames.map((name, index) => (
-                    <p key={`${match.id}-spectator-a-${index}`} className="break-words">
-                      {name}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p
-                  className="truncate text-base sm:text-xl font-bold leading-tight"
-                  style={{ color: TEAM.A.bg }}
-                >
-                  <PlayerNamesWithGreyAmpersand names={aNames} />
-                </p>
-              )}
-            </div>
-
-            <span className="text-xs sm:text-sm font-black text-white/20">VS</span>
-
-            <div className="min-w-0 text-left">
-              <p
-                className="truncate text-[9px] uppercase tracking-[0.13em] opacity-65"
-                style={{ color: TEAM.B.bg }}
-              >
-                {teams.B.name || "Team B"}
-              </p>
-              {isDB ? (
-                <div
-                  className="mt-1 space-y-0.5 text-base sm:text-lg font-bold leading-tight"
-                  style={{ color: TEAM.B.bg }}
-                >
-                  {bNames.map((name, index) => (
-                    <p key={`${match.id}-spectator-b-${index}`} className="break-words">
-                      {name}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p
-                  className="truncate text-base sm:text-xl font-bold leading-tight"
-                  style={{ color: TEAM.B.bg }}
-                >
-                  <PlayerNamesWithGreyAmpersand names={bNames} />
-                </p>
-              )}
-            </div>
-          </div>
+        <div className="flex items-center justify-center">
+          {match.clutchA && <PawClutchIcon color={TEAM.A.bg} />}
         </div>
-      </div>
 
-      <div className="border-t border-white/10 bg-[#0D1218] px-4 py-2.5">
-        {match.result ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#39D47A]">
-              Final
-            </span>
-            <p className="text-sm">
-              <span style={{ color: TEAM.A.bg }}>
-                {teams.A.name} +{points.pointsA}
-              </span>
-              <span className="px-2 text-white/25">—</span>
-              <span style={{ color: TEAM.B.bg }}>
-                {teams.B.name} +{points.pointsB}
-              </span>
-            </p>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#F5A416] live-pulse" />
-              Awaiting result
-            </span>
-          </div>
-        )}
+        <SpectatorPlayerStack names={aNames} color={TEAM.A.bg} />
+
+        <div className="text-center text-[11px] sm:text-[13px] font-black text-white"
+          style={{ fontFamily: DISPLAY_FONT }}>
+          VS
+        </div>
+
+        <SpectatorPlayerStack names={bNames} color={TEAM.B.bg} />
+
+        <div className="flex items-center justify-center">
+          {match.clutchB && <VikingClutchIcon color={TEAM.B.bg} />}
+        </div>
+
+        <SpectatorResultBox match={match} points={points} />
       </div>
     </div>
   );
@@ -1548,15 +1631,10 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
     .filter((round) => roundsState[round.id]?.matches?.length > 0)
     .map((round) => round.id);
 
-  const [spectatorRound, setSpectatorRound] = useState(
-    availableRoundIds[0] || 1
-  );
+  const [spectatorRound, setSpectatorRound] = useState(availableRoundIds[0] || 1);
 
   useEffect(() => {
-    if (
-      availableRoundIds.length > 0 &&
-      !availableRoundIds.includes(spectatorRound)
-    ) {
+    if (availableRoundIds.length > 0 && !availableRoundIds.includes(spectatorRound)) {
       setSpectatorRound(availableRoundIds[0]);
     }
   }, [availableRoundIds.join(","), spectatorRound]);
@@ -1575,11 +1653,6 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
     });
   });
 
-  const allRoundsDone = ROUND_META.every((round) => {
-    const state = roundsState[round.id];
-    return state.matches.length > 0 && state.matches.every((match) => match.result);
-  });
-
   const completedCount = Object.values(roundsState).reduce(
     (count, round) => count + round.matches.filter((match) => match.result).length,
     0
@@ -1589,102 +1662,365 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
     0
   );
 
+  const allRoundsDone = ROUND_META.every((round) => {
+    const state = roundsState[round.id];
+    return state.matches.length > 0 && state.matches.every((match) => match.result);
+  });
+
+  const genderedGroups =
+    selectedMeta?.type === "gendered"
+      ? [
+          {
+            type: "F",
+            label: "Women's Doubles",
+            matches: (selectedRound?.matches || [])
+              .filter((match) => match.type === "F")
+              .sort((a, b) => a.court - b.court),
+          },
+          {
+            type: "M",
+            label: "Men's Doubles",
+            matches: (selectedRound?.matches || [])
+              .filter((match) => match.type === "M")
+              .sort((a, b) => a.court - b.court),
+          },
+        ]
+      : [];
+
   return (
-    <div
-      style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}
-    >
+    <div style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600&display=swap');
         :root { color-scheme: dark; }
         * { box-sizing: border-box; }
         body { margin: 0; background: #080B0F; }
         button { font: inherit; letter-spacing: .025em; }
-        @keyframes livePulse { 0%,100% { opacity: 1 } 50% { opacity: .42 } }
-        .live-pulse { animation: livePulse 1.6s ease-in-out infinite; }
+        @keyframes liveGlow {
+          0%,100% { opacity: 1; box-shadow: 0 0 7px rgba(57,212,122,.95), 0 0 14px rgba(57,212,122,.42); }
+          50% { opacity: .72; box-shadow: 0 0 3px rgba(57,212,122,.7), 0 0 8px rgba(57,212,122,.25); }
+        }
+        .live-glow { animation: liveGlow 1.7s ease-in-out infinite; }
+
+        .spectator-shell {
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        .spectator-header-shell {
+          width: min(100%, 1560px);
+          margin: 0 auto;
+        }
+
+        .spectator-score-shell {
+          width: min(100%, 820px);
+          margin: 0 auto;
+        }
+
+        .spectator-content-shell {
+          width: min(100%, 1220px);
+          margin: 0 auto;
+        }
+
+        .spectator-score {
+          font-size: clamp(72px, 11vw, 108px);
+          line-height: .74;
+        }
+
+        .spectator-team-name {
+          font-size: clamp(14px, 2.2vw, 20px);
+        }
+
+        .spectator-player {
+          font-size: clamp(16px, 2.2vw, 22px);
+          line-height: 1.12;
+        }
+
+        .spectator-player-name {
+          white-space: normal;
+          overflow: visible;
+          text-overflow: clip;
+          overflow-wrap: anywhere;
+        }
+
+        .spectator-card {
+          min-height: clamp(72px, 8.8vw, 88px);
+        }
+
+        .spectator-court-number {
+          font-size: clamp(30px, 4.5vw, 38px);
+        }
+
+        .spectator-section-title {
+          font-size: clamp(16px, 2.2vw, 20px);
+        }
+
+        .spectator-round-title {
+          font-size: clamp(24px, 3.2vw, 32px);
+        }
+
+        .spectator-round-subtitle {
+          font-size: clamp(17px, 2.6vw, 24px);
+        }
+
+        .spectator-result-number {
+          font-size: clamp(20px, 3vw, 26px);
+        }
+
+        .spectator-live-label {
+          font-size: clamp(9px, 1.15vw, 11px);
+        }
+
+        .spectator-clutch-icon {
+          width: clamp(16px, 1.25vw, 24px);
+          height: clamp(16px, 1.25vw, 24px);
+        }
+
+        .spectator-legend-icon {
+          width: clamp(12px, .8vw, 17px);
+          height: clamp(12px, .8vw, 17px);
+        }
+
+        .spectator-legend-text {
+          font-size: clamp(8px, .65vw, 10px);
+        }
+
+        @media (max-width: 600px) {
+          .spectator-header-shell,
+          .spectator-score-shell,
+          .spectator-content-shell {
+            width: 100%;
+          }
+
+          .spectator-card-grid {
+            grid-template-columns:
+              44px 16px minmax(82px, 1fr) 22px minmax(82px, 1fr) 16px 72px !important;
+            column-gap: 5px !important;
+          }
+
+          .spectator-result-box {
+            min-width: 68px;
+          }
+
+          .spectator-card {
+            min-height: 72px;
+          }
+
+          .spectator-player {
+            font-size: clamp(14px, 4vw, 17px);
+          }
+
+          .spectator-court-label {
+            font-size: 8px !important;
+            line-height: 1 !important;
+          }
+
+          .spectator-court-number {
+            font-size: 28px !important;
+          }
+
+          .spectator-court-cell {
+            padding-right: 6px !important;
+          }
+        }
+
+        @media (min-width: 601px) and (max-width: 1024px) {
+          .spectator-header-shell {
+            width: min(100%, 980px);
+          }
+
+          .spectator-score-shell {
+            width: min(100%, 760px);
+          }
+
+          .spectator-content-shell {
+            width: min(100%, 900px);
+          }
+
+          .spectator-card-grid {
+            grid-template-columns:
+              54px 22px minmax(165px, 1fr) 30px minmax(165px, 1fr) 22px 90px !important;
+            column-gap: 9px !important;
+          }
+
+          .spectator-result-box {
+            min-width: 86px;
+          }
+
+          .spectator-card {
+            min-height: 80px;
+          }
+        }
+
+        @media (min-width: 1025px) {
+          .spectator-header-shell {
+            width: min(94vw, 1560px);
+          }
+
+          .spectator-score-shell {
+            width: min(72vw, 820px);
+          }
+
+          .spectator-content-shell {
+            width: min(78vw, 1120px);
+          }
+
+          .spectator-card-grid {
+            grid-template-columns:
+              64px 30px 230px 40px 230px 30px 108px !important;
+            column-gap: 12px !important;
+            justify-content: center;
+          }
+
+          .spectator-result-box {
+            min-width: 104px;
+          }
+
+          .spectator-card {
+            min-height: 82px;
+          }
+
+          .spectator-player {
+            font-size: clamp(19px, 1.1vw, 22px);
+          }
+        }
+
+          .spectator-score-shell {
+            width: min(92vw, 1460px);
+          }
+
+          .spectator-content-shell {
+            width: min(78vw, 1220px);
+          }
+
+          .spectator-card-grid {
+            grid-template-columns: 68px 36px 260px 44px 260px 36px 118px !important;
+            column-gap: 16px !important;
+            justify-content: center;
+          }
+
+          .spectator-result-box {
+            min-width: 110px;
+          }
+
+          .spectator-card {
+            min-height: 84px;
+          }
+
+          .spectator-player {
+            font-size: clamp(20px, 1.25vw, 24px);
+          }
+        }
       `}</style>
 
-      <header className="sticky top-0 z-[1000] border-b border-white/10 bg-[#090D12] shadow-[0_8px_30px_rgba(0,0,0,.35)]">
-        <div className="mx-auto flex h-[58px] max-w-6xl items-center justify-between px-4">
+      <header className="border-b border-white/10 bg-[#080B0F]">
+        <div className="spectator-header-shell flex h-[52px] items-center justify-between px-4">
           <div className="flex items-baseline gap-2" style={{ fontFamily: DISPLAY_FONT }}>
-            <span className="text-xl font-extrabold tracking-[0.12em] text-white">
-              THE YUKO
-            </span>
-            <span className="text-xl font-extrabold tracking-[0.12em] text-[#F5A416]">
-              CUP
-            </span>
+            <span className="text-[19px] sm:text-xl font-extrabold tracking-[0.1em] text-white">THE YUKO</span>
+            <span className="text-[19px] sm:text-xl font-extrabold tracking-[0.1em] text-[#F5A416]">CUP</span>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#39D47A] live-pulse" />
-            <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/45">
-              Live spectator
+            <span
+              className="live-glow rounded-full"
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                flex: "0 0 10px",
+                backgroundColor: "#39D47A",
+                boxShadow:
+                  "0 0 7px rgba(57,212,122,.95), 0 0 14px rgba(57,212,122,.42)",
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="spectator-live-label font-bold uppercase tracking-[0.08em]"
+              style={{ color: "#39D47A" }}
+            >
+              Live Match Centre
             </span>
           </div>
         </div>
       </header>
 
-      {hasMatches && <Scoreboard teams={teams} roundsState={roundsState} />}
+      {hasMatches && (
+        <>
+          <section className="border-b border-white/10 bg-[#080B0F]">
+            <div className="spectator-score-shell px-4 py-3 sm:py-4">
+              <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
+                <div className="min-w-0 text-center">
+                  <div className="spectator-team-name truncate font-black uppercase tracking-[0.07em]"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.A.bg }}>
+                    {teams.A.name || "TEAM A"}
+                  </div>
+                  <div className="spectator-score mt-1 font-black tabular-nums"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.A.bg }}>
+                    {totalA}
+                  </div>
+                </div>
 
-      <main className="mx-auto max-w-4xl px-4 py-7 sm:py-9">
+                <div className="pb-2 text-[26px] sm:text-[34px] font-black text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}>
+                  -
+                </div>
+
+                <div className="min-w-0 text-center">
+                  <div className="spectator-team-name truncate font-black uppercase tracking-[0.07em]"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.B.bg }}>
+                    {teams.B.name || "TEAM B"}
+                  </div>
+                  <div className="spectator-score mt-1 font-black tabular-nums"
+                    style={{ fontFamily: DISPLAY_FONT, color: TEAM.B.bg }}>
+                    {totalB}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <SpectatorRoundProgress
+            activeRound={spectatorRound}
+            setActiveRound={setSpectatorRound}
+            roundsState={roundsState}
+            allowedRoundIds={availableRoundIds}
+          />
+        </>
+      )}
+
+      <main className="spectator-content-shell px-3.5 py-4 sm:px-4 sm:py-6">
         {!hasMatches ? (
           <div className="mx-auto max-w-xl py-16 text-center">
-            <div
-              className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#F5A416]/25 bg-[#F5A416]/5"
-            >
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#F5A416]/25 bg-[#F5A416]/5">
               <Trophy size={28} className="text-[#F5A416]" />
             </div>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">
-              Live tournament
-            </p>
-            <h1
-              className="mt-2 text-4xl sm:text-5xl font-black tracking-[0.05em] text-white"
-              style={{ fontFamily: DISPLAY_FONT }}
-            >
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">Live tournament</p>
+            <h1 style={{ fontFamily: DISPLAY_FONT }}
+              className="mt-2 text-4xl sm:text-5xl font-black tracking-[0.05em] text-white">
               MATCHUPS COMING SOON
             </h1>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/45">
-              The Kitchen Cabinet is preparing the tournament. This screen will
-              update automatically as matchups are released.
+              Matchups will appear here automatically as the tournament is prepared.
             </p>
           </div>
         ) : (
           <>
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35">
-                  Live match centre
-                </p>
-                <h1
-                  className="mt-1 text-3xl sm:text-4xl font-black tracking-[0.04em] text-white"
-                  style={{ fontFamily: DISPLAY_FONT }}
-                >
-                  {selectedMeta?.label?.toUpperCase()}{" "}
-                  <span className="text-[#F5A416]">
-                    {selectedMeta?.subtitle?.toUpperCase()}
-                  </span>
-                </h1>
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-white/40">
-                {completedCount}/{totalMatches} results final
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h1 className="spectator-round-subtitle truncate font-black uppercase tracking-[0.025em] text-white"
+                style={{ fontFamily: DISPLAY_FONT }}>
+                {selectedMeta?.subtitle}
+              </h1>
+
+              <div className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.08em] text-white/55">
+                {completedCount}/{totalMatches} Final
               </div>
             </div>
 
-            <RoundTabs
-              activeRound={spectatorRound}
-              setActiveRound={setSpectatorRound}
-              roundsState={roundsState}
-              allowedRoundIds={availableRoundIds}
-            />
-
             {allRoundsDone && (
-              <div className="mb-6 overflow-hidden rounded-2xl border border-[#F5A416]/25 bg-[#15130D] px-5 py-5 text-center">
-                <Trophy className="mx-auto mb-2 text-[#F5A416]" />
-                <p className="text-[9px] uppercase tracking-[0.2em] text-white/35">
-                  Final result
-                </p>
-                <p
-                  className="mt-1 text-3xl font-black tracking-[0.05em] text-white"
-                  style={{ fontFamily: DISPLAY_FONT }}
-                >
+              <div className="mb-5 overflow-hidden rounded-2xl border border-[#F5A416]/25 bg-[#15130D] px-5 py-4 text-center">
+                <Trophy className="mx-auto mb-1 text-[#F5A416]" />
+                <p className="text-[9px] uppercase tracking-[0.2em] text-white/35">Final result</p>
+                <p className="mt-1 text-2xl font-black tracking-[0.05em] text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}>
                   {totalA === totalB
                     ? "THE YUKO CUP ENDS IN A TIE"
                     : totalA > totalB
@@ -1694,24 +2030,52 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
               </div>
             )}
 
-            <div className="grid gap-3">
-              {(selectedRound?.matches || []).map((match) => (
-                <SpectatorMatchCard
-                  key={match.id}
-                  match={match}
-                  teams={teams}
-                  players={players}
-                />
-              ))}
+            {selectedMeta?.type === "gendered" ? (
+              <div className="space-y-5">
+                {genderedGroups.map((group) => {
+                  if (group.matches.length === 0) return null;
+                  return (
+                    <section key={group.type}>
+                      <h2 className="spectator-section-title mb-2 font-black uppercase tracking-[0.07em] text-white"
+                        style={{ fontFamily: DISPLAY_FONT }}>
+                        {group.label}
+                      </h2>
+                      <div className="grid gap-2">
+                        {group.matches.map((match) => (
+                          <SpectatorMatchCard key={match.id} match={match} teams={teams} players={players} />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {(selectedRound?.matches || [])
+                  .slice()
+                  .sort((a, b) => a.court - b.court)
+                  .map((match) => (
+                    <SpectatorMatchCard key={match.id} match={match} teams={teams} players={players} />
+                  ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-center gap-4 uppercase tracking-[0.05em] text-white/40">
+              <div className="flex items-center gap-1.5">
+                <PawClutchIcon color={TEAM.A.bg} legend />
+                <span className="spectator-legend-text">= {teams.A.name || "Team A"} clutch</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <VikingClutchIcon color={TEAM.B.bg} legend />
+                <span className="spectator-legend-text">= {teams.B.name || "Team B"} clutch</span>
+              </div>
             </div>
           </>
         )}
       </main>
 
-      <footer className="pb-8 text-center">
-        <p className="text-[9px] uppercase tracking-[0.14em] text-white/25">
-          {saveStatus}
-        </p>
+      <footer className="pb-5 text-center">
+        <p className="text-[8px] uppercase tracking-[0.12em] text-white/20">{saveStatus}</p>
       </footer>
     </div>
   );
