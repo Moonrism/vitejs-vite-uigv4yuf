@@ -1424,6 +1424,328 @@ function RoundTabs({ activeRound, setActiveRound, roundsState, allowedRoundIds =
   );
 }
 
+
+/* ---------------------------------------------------------------
+   SPECTATOR MODE — read-only live tournament view
+----------------------------------------------------------------*/
+function SpectatorMatchCard({ match, teams, players }) {
+  const typeLabel = TYPE_LABEL[match.type];
+  const isDB = match.type === "DB";
+  const aNames = match.teamAIds.map((id) => playerName(players, id));
+  const bNames = match.teamBIds.map((id) => playerName(players, id));
+  const points = calculateMatchPoints(match, match.result);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#11161D] shadow-[0_18px_45px_rgba(0,0,0,.16)]">
+      <div className="grid grid-cols-[76px_1fr] sm:grid-cols-[90px_1fr]">
+        <div className="flex flex-col items-center justify-center border-r border-white/10 bg-[#0B0F14] px-2 py-4">
+          <span className="text-[9px] uppercase tracking-[0.2em] text-white/35">Court</span>
+          <span
+            className="mt-1 text-5xl sm:text-6xl font-black leading-none"
+            style={{ fontFamily: DISPLAY_FONT, color: COURT }}
+          >
+            {match.court}
+          </span>
+        </div>
+
+        <div className="min-w-0 px-4 py-3 sm:px-5">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="text-[9px] uppercase tracking-[0.16em] text-white/35">
+              {typeLabel}
+            </span>
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {match.clutchA && (
+                <span
+                  className="rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-wide"
+                  style={{
+                    color: TEAM.A.bg,
+                    borderColor: `${TEAM.A.bg}55`,
+                    backgroundColor: `${TEAM.A.bg}10`,
+                  }}
+                >
+                  ★ {teams.A.name} clutch
+                </span>
+              )}
+              {match.clutchB && (
+                <span
+                  className="rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-wide"
+                  style={{
+                    color: TEAM.B.bg,
+                    borderColor: `${TEAM.B.bg}55`,
+                    backgroundColor: `${TEAM.B.bg}10`,
+                  }}
+                >
+                  ★ {teams.B.name} clutch
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5">
+            <div className="min-w-0 text-right">
+              <p
+                className="truncate text-[9px] uppercase tracking-[0.13em] opacity-65"
+                style={{ color: TEAM.A.bg }}
+              >
+                {teams.A.name || "Team A"}
+              </p>
+              {isDB ? (
+                <div
+                  className="mt-1 space-y-0.5 text-base sm:text-lg font-bold leading-tight"
+                  style={{ color: TEAM.A.bg }}
+                >
+                  {aNames.map((name, index) => (
+                    <p key={`${match.id}-spectator-a-${index}`} className="break-words">
+                      {name}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p
+                  className="truncate text-base sm:text-xl font-bold leading-tight"
+                  style={{ color: TEAM.A.bg }}
+                >
+                  <PlayerNamesWithGreyAmpersand names={aNames} />
+                </p>
+              )}
+            </div>
+
+            <span className="text-xs sm:text-sm font-black text-white/20">VS</span>
+
+            <div className="min-w-0 text-left">
+              <p
+                className="truncate text-[9px] uppercase tracking-[0.13em] opacity-65"
+                style={{ color: TEAM.B.bg }}
+              >
+                {teams.B.name || "Team B"}
+              </p>
+              {isDB ? (
+                <div
+                  className="mt-1 space-y-0.5 text-base sm:text-lg font-bold leading-tight"
+                  style={{ color: TEAM.B.bg }}
+                >
+                  {bNames.map((name, index) => (
+                    <p key={`${match.id}-spectator-b-${index}`} className="break-words">
+                      {name}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p
+                  className="truncate text-base sm:text-xl font-bold leading-tight"
+                  style={{ color: TEAM.B.bg }}
+                >
+                  <PlayerNamesWithGreyAmpersand names={bNames} />
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-white/10 bg-[#0D1218] px-4 py-2.5">
+        {match.result ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#39D47A]">
+              Final
+            </span>
+            <p className="text-sm">
+              <span style={{ color: TEAM.A.bg }}>
+                {teams.A.name} +{points.pointsA}
+              </span>
+              <span className="px-2 text-white/25">—</span>
+              <span style={{ color: TEAM.B.bg }}>
+                {teams.B.name} +{points.pointsB}
+              </span>
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#F5A416] live-pulse" />
+              Awaiting result
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SpectatorView({ teams, players, roundsState, saveStatus }) {
+  const availableRoundIds = ROUND_META
+    .filter((round) => roundsState[round.id]?.matches?.length > 0)
+    .map((round) => round.id);
+
+  const [spectatorRound, setSpectatorRound] = useState(
+    availableRoundIds[0] || 1
+  );
+
+  useEffect(() => {
+    if (
+      availableRoundIds.length > 0 &&
+      !availableRoundIds.includes(spectatorRound)
+    ) {
+      setSpectatorRound(availableRoundIds[0]);
+    }
+  }, [availableRoundIds.join(","), spectatorRound]);
+
+  const hasMatches = availableRoundIds.length > 0;
+  const selectedMeta = ROUND_META.find((round) => round.id === spectatorRound);
+  const selectedRound = roundsState[spectatorRound];
+
+  let totalA = 0;
+  let totalB = 0;
+  Object.values(roundsState).forEach((round) => {
+    round.matches.forEach((match) => {
+      const points = calculateMatchPoints(match, match.result);
+      totalA += points.pointsA;
+      totalB += points.pointsB;
+    });
+  });
+
+  const allRoundsDone = ROUND_META.every((round) => {
+    const state = roundsState[round.id];
+    return state.matches.length > 0 && state.matches.every((match) => match.result);
+  });
+
+  const completedCount = Object.values(roundsState).reduce(
+    (count, round) => count + round.matches.filter((match) => match.result).length,
+    0
+  );
+  const totalMatches = Object.values(roundsState).reduce(
+    (count, round) => count + round.matches.length,
+    0
+  );
+
+  return (
+    <div
+      style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600&display=swap');
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #080B0F; }
+        button { font: inherit; letter-spacing: .025em; }
+        @keyframes livePulse { 0%,100% { opacity: 1 } 50% { opacity: .42 } }
+        .live-pulse { animation: livePulse 1.6s ease-in-out infinite; }
+      `}</style>
+
+      <header className="sticky top-0 z-[1000] border-b border-white/10 bg-[#090D12] shadow-[0_8px_30px_rgba(0,0,0,.35)]">
+        <div className="mx-auto flex h-[58px] max-w-6xl items-center justify-between px-4">
+          <div className="flex items-baseline gap-2" style={{ fontFamily: DISPLAY_FONT }}>
+            <span className="text-xl font-extrabold tracking-[0.12em] text-white">
+              THE YUKO
+            </span>
+            <span className="text-xl font-extrabold tracking-[0.12em] text-[#F5A416]">
+              CUP
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#39D47A] live-pulse" />
+            <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/45">
+              Live spectator
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {hasMatches && <Scoreboard teams={teams} roundsState={roundsState} />}
+
+      <main className="mx-auto max-w-4xl px-4 py-7 sm:py-9">
+        {!hasMatches ? (
+          <div className="mx-auto max-w-xl py-16 text-center">
+            <div
+              className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-[#F5A416]/25 bg-[#F5A416]/5"
+            >
+              <Trophy size={28} className="text-[#F5A416]" />
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">
+              Live tournament
+            </p>
+            <h1
+              className="mt-2 text-4xl sm:text-5xl font-black tracking-[0.05em] text-white"
+              style={{ fontFamily: DISPLAY_FONT }}
+            >
+              MATCHUPS COMING SOON
+            </h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-white/45">
+              The Kitchen Cabinet is preparing the tournament. This screen will
+              update automatically as matchups are released.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-[9px] uppercase tracking-[0.18em] text-white/35">
+                  Live match centre
+                </p>
+                <h1
+                  className="mt-1 text-3xl sm:text-4xl font-black tracking-[0.04em] text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}
+                >
+                  {selectedMeta?.label?.toUpperCase()}{" "}
+                  <span className="text-[#F5A416]">
+                    {selectedMeta?.subtitle?.toUpperCase()}
+                  </span>
+                </h1>
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-white/40">
+                {completedCount}/{totalMatches} results final
+              </div>
+            </div>
+
+            <RoundTabs
+              activeRound={spectatorRound}
+              setActiveRound={setSpectatorRound}
+              roundsState={roundsState}
+              allowedRoundIds={availableRoundIds}
+            />
+
+            {allRoundsDone && (
+              <div className="mb-6 overflow-hidden rounded-2xl border border-[#F5A416]/25 bg-[#15130D] px-5 py-5 text-center">
+                <Trophy className="mx-auto mb-2 text-[#F5A416]" />
+                <p className="text-[9px] uppercase tracking-[0.2em] text-white/35">
+                  Final result
+                </p>
+                <p
+                  className="mt-1 text-3xl font-black tracking-[0.05em] text-white"
+                  style={{ fontFamily: DISPLAY_FONT }}
+                >
+                  {totalA === totalB
+                    ? "THE YUKO CUP ENDS IN A TIE"
+                    : totalA > totalB
+                      ? `${teams.A.name.toUpperCase()} WINS THE YUKO CUP`
+                      : `${teams.B.name.toUpperCase()} WINS THE YUKO CUP`}
+                </p>
+              </div>
+            )}
+
+            <div className="grid gap-3">
+              {(selectedRound?.matches || []).map((match) => (
+                <SpectatorMatchCard
+                  key={match.id}
+                  match={match}
+                  teams={teams}
+                  players={players}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+
+      <footer className="pb-8 text-center">
+        <p className="text-[9px] uppercase tracking-[0.14em] text-white/25">
+          {saveStatus}
+        </p>
+      </footer>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------------
    APP
 ----------------------------------------------------------------*/
@@ -1436,6 +1758,28 @@ export default function App() {
   const [pairingRoundIdx, setPairingRoundIdx] = useState(1);
   const [saveStatus, setSaveStatus] = useState("Connecting to shared tournament…");
   const [cloudReady, setCloudReady] = useState(false);
+  const [spectatorLinkCopied, setSpectatorLinkCopied] = useState(false);
+
+  const isDirector = useMemo(() => {
+    const mode = new URLSearchParams(window.location.search).get("mode");
+    return mode === "director";
+  }, []);
+
+  function getSpectatorUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("mode", "spectator");
+    return url.toString();
+  }
+
+  async function copySpectatorLink() {
+    try {
+      await navigator.clipboard.writeText(getSpectatorUrl());
+      setSpectatorLinkCopied(true);
+      window.setTimeout(() => setSpectatorLinkCopied(false), 1800);
+    } catch (error) {
+      console.warn("Could not copy spectator link:", error);
+    }
+  }
 
   // Prevent a state update received from Supabase from immediately being
   // written back to Supabase as a duplicate update.
@@ -1528,7 +1872,7 @@ export default function App() {
 
   // Save changes to Supabase after a short delay.
   useEffect(() => {
-    if (!cloudReady) return undefined;
+    if (!cloudReady || !isDirector) return undefined;
 
     if (applyingRemoteUpdate.current) {
       applyingRemoteUpdate.current = false;
@@ -1587,6 +1931,7 @@ export default function App() {
     roundsState,
     activeRound,
     pairingRoundIdx,
+    isDirector,
   ]);
 
   function goToTeams() {
@@ -1672,6 +2017,17 @@ export default function App() {
     );
   }
 
+  if (!isDirector) {
+    return (
+      <SpectatorView
+        teams={teams}
+        players={players}
+        roundsState={roundsState}
+        saveStatus={saveStatus}
+      />
+    );
+  }
+
   return (
     <div style={{ fontFamily: BODY_FONT, backgroundColor: "#080B0F", minHeight: "100vh" }}>
       <style>{`
@@ -1696,7 +2052,16 @@ export default function App() {
             <span className="text-white text-xl font-extrabold tracking-[0.12em]">THE YUKO</span>
             <span className="text-[#F5A416] text-xl font-extrabold tracking-[0.12em]">CUP</span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em] px-3 py-1.5 rounded border border-[#F5A416]/45 text-[#F5A416]">Kitchen Cabinet</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={copySpectatorLink}
+              className="hidden sm:inline-flex text-[9px] font-bold uppercase tracking-[0.14em] px-3 py-1.5 rounded border border-white/15 text-white/50 hover:text-white/80 hover:border-white/25 transition"
+            >
+              {spectatorLinkCopied ? "Link copied" : "Copy spectator link"}
+            </button>
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] px-3 py-1.5 rounded border border-[#F5A416]/45 text-[#F5A416]">Director mode</span>
+          </div>
         </div>
       </header>
 
@@ -1858,6 +2223,7 @@ export default function App() {
 
       <div className="text-center pb-8 space-y-2">
         <p className="text-[10px] uppercase tracking-[0.14em] text-[#F4F7FA]/35">{saveStatus}</p>
+        <p className="text-[9px] uppercase tracking-[0.14em] text-[#F5A416]/55">Director controls · shared live tournament</p>
         <button onClick={resetAll} className="text-xs inline-flex items-center gap-1 text-[#F4F7FA]/40 hover:text-[#FF6464]">
           <RotateCcw size={12} /> Reset tournament
         </button>
