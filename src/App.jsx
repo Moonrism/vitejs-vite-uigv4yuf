@@ -1665,14 +1665,21 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
     });
   });
 
-  const completedCount = Object.values(roundsState).reduce(
-    (count, round) => count + round.matches.filter((match) => match.result).length,
-    0
+  const matchProgress = Object.values(roundsState).reduce(
+    (progress, round) => {
+      const matches = Array.isArray(round?.matches)
+        ? round.matches.filter(Boolean)
+        : [];
+
+      progress.completed += matches.filter((match) => match.result).length;
+      progress.total += matches.length;
+      return progress;
+    },
+    { completed: 0, total: 0 }
   );
-  const totalMatches = Object.values(roundsState).reduce(
-    (count, round) => count + round.matches.length,
-    0
-  );
+
+  const completedCount = matchProgress.completed;
+  const totalMatches = matchProgress.total;
 
   const allRoundsDone = ROUND_META.every((round) => {
     const state = roundsState[round.id];
@@ -1863,9 +1870,34 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
             width: 100%;
             min-width: 0;
             grid-template-columns:
-              42px 16px minmax(0, 1fr) 20px minmax(0, 1fr) 16px !important;
+              42px 16px minmax(0, 1fr) 24px minmax(0, 1fr) 16px !important;
             column-gap: 5px !important;
             padding: 8px 8px 6px !important;
+          }
+
+          .spectator-card-grid > .spectator-player:nth-of-type(3) {
+            text-align: center;
+            justify-self: center;
+            width: 100%;
+          }
+
+          .spectator-card-grid > .spectator-player:nth-of-type(5) {
+            text-align: center;
+            justify-self: center;
+            width: 100%;
+          }
+
+          .spectator-card-grid > .spectator-vs {
+            justify-self: center;
+            align-self: center;
+          }
+
+          .spectator-card-grid > .spectator-clutch-cell:nth-of-type(2) {
+            justify-self: start;
+          }
+
+          .spectator-card-grid > .spectator-clutch-cell:nth-of-type(6) {
+            justify-self: end;
           }
 
           .spectator-court-cell {
@@ -1887,6 +1919,12 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
             line-height: 1.08 !important;
           }
 
+          .spectator-card-grid > .spectator-player {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+
           .spectator-player-name {
             white-space: normal !important;
             overflow: visible !important;
@@ -1897,6 +1935,8 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
 
           .spectator-vs {
             font-size: 10px !important;
+            width: 100%;
+            text-align: center;
           }
 
           .spectator-clutch-icon {
@@ -2193,16 +2233,18 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
               </div>
             )}
 
-            <div className="mt-4 flex items-center justify-center gap-4 uppercase tracking-[0.05em] text-white/40">
-              <div className="flex items-center gap-1.5">
-                <PawClutchIcon color={TEAM.A.bg} legend />
-                <span className="spectator-legend-text">= {teams.A.name || "Team A"} clutch</span>
+            {selectedMeta?.type !== "dreambreaker" && (
+              <div className="mt-4 flex items-center justify-center gap-4 uppercase tracking-[0.05em] text-white/40">
+                <div className="flex items-center gap-1.5">
+                  <PawClutchIcon color={TEAM.A.bg} legend />
+                  <span className="spectator-legend-text">= {teams.A.name || "Team A"} clutch</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <VikingClutchIcon color={TEAM.B.bg} legend />
+                  <span className="spectator-legend-text">= {teams.B.name || "Team B"} clutch</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <VikingClutchIcon color={TEAM.B.bg} legend />
-                <span className="spectator-legend-text">= {teams.B.name || "Team B"} clutch</span>
-              </div>
-            </div>
+            )}
           </>
         )}
       </main>
