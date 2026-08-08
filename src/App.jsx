@@ -1949,8 +1949,10 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
           }
 
           .spectator-result-mobile {
-            display: flex;
-            justify-content: center;
+            display: grid;
+            grid-template-columns:
+              42px 16px minmax(0, 1fr) 24px minmax(0, 1fr) 16px;
+            column-gap: 5px;
             align-items: center;
             border-top: 1px solid rgba(255,255,255,.07);
             padding: 4px 8px 5px;
@@ -1958,13 +1960,19 @@ function SpectatorView({ teams, players, roundsState, saveStatus }) {
             text-align: center;
           }
 
+          .spectator-result-mobile > .spectator-result-box {
+            grid-column: 4;
+            justify-self: center;
+          }
+
           .spectator-result-mobile .spectator-result-box {
             height: 22px !important;
-            min-width: 0 !important;
-            width: auto !important;
+            min-width: max-content !important;
+            width: max-content !important;
             border: 0 !important;
             background: transparent !important;
             padding: 0 !important;
+            justify-self: center;
           }
 
           .spectator-result-mobile .spectator-result-box span {
